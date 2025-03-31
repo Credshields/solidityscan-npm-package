@@ -16,9 +16,8 @@ const getApi = (apiToken) => {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiToken}`,
-        "CF-Access-Client-Secret":
-          "a4ca6863cf1cd0c21cc9ee7717d2588f0b520bab01e96d608e554cf2ef70f287",
-        "CF-Access-Client-Id": "e00adeef9b08d16e7255231ab4e727f1.access",
+        "CF-Access-Client-Secret": "",
+        "CF-Access-Client-Id": "",
       },
     });
   } else {
@@ -26,9 +25,8 @@ const getApi = (apiToken) => {
       baseURL: "https://api-develop.solidityscan.com/",
       headers: {
         "Content-Type": "application/json",
-        "CF-Access-Client-Secret":
-          "a4ca6863cf1cd0c21cc9ee7717d2588f0b520bab01e96d608e554cf2ef70f287",
-        "CF-Access-Client-Id": "e00adeef9b08d16e7255231ab4e727f1.access",
+        "CF-Access-Client-Secret": "",
+        "CF-Access-Client-Id": "",
       },
     });
   }
