@@ -79,12 +79,39 @@ function scan() {
       .catch((error) => {
         console.error("Error during scan:", error);
       });
+  } else if (args.includes("-l")) {
+    // Start local WebSocket file server to expose file system
+    const dirFlagIndex = args.indexOf("-p");
+    const serveDirectory =
+      dirFlagIndex !== -1 && args[dirFlagIndex + 1]
+        ? args[dirFlagIndex + 1]
+        : process.cwd();
+
+    const portFlagIndex = args.indexOf("--port");
+    const port =
+      portFlagIndex !== -1 && args[portFlagIndex + 1]
+        ? parseInt(args[portFlagIndex + 1], 10)
+        : 8080;
+
+    try {
+      utils.startLocalFileServer(serveDirectory, port);
+    } catch (error) {
+      console.error(error.message);
+      process.exit(1);
+    }
+    // keep the process alive when in local server mode
+    return;
   } else {
     console.error(
       "Unknown command. Usage: solidityscan scan <projectUrl> <branch> <apiKey>"
     );
     process.exit(1);
   }
+}
+
+if (require.main === module) {
+  // executed via `node src/cli.js ...` – run the CLI
+  scan();
 }
 
 module.exports = {

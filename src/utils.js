@@ -231,6 +231,178 @@ function stopSpinner(interval, statusMessage) {
   console.log(`${statusMessage}... Done`);
 }
 
+// New helper to serve local directory over WebSocket
+function startLocalFileServer(rootDirectory, port = 8080) {
+  if (!fs.existsSync(rootDirectory)) {
+    throw new Error(`Directory not found: ${rootDirectory}`);
+  }
+
+  const absoluteRoot = path.resolve(rootDirectory);
+  const wss = new WebSocket.Server({ port });
+
+  // eslint-disable-next-line no-console
+  console.log(`SolidityScan local file server started on ws://localhost:${wss.options.port}\nServing directory: ${absoluteRoot}`);
+
+  wss.on("connection", (socket) => {
+    socket.on("message", async (raw) => {
+      let message;
+      try {
+        message = JSON.parse(raw);
+      } catch (err) {
+        socket.send(
+          JSON.stringify({ type: "error", error: "Invalid JSON message" })
+        );
+        return;
+      }
+
+      const { action, payload } = message;
+
+      if (action === "listFiles") {
+        // Return hierarchical folder tree with metadata
+        const buildTree = (dir, relPath = "") => {
+          const name = path.basename(dir);
+          const stat = fs.statSync(dir);
+          if (stat.isDirectory()) {
+            const dirs = [];
+            const files = [];
+            fs.readdirSync(dir).forEach((entry) => {
+              if (entry === "node_modules") return;
+              const abs = path.join(dir, entry);
+              const childRel = path.join(relPath, entry);
+              if (fs.statSync(abs).isDirectory()) {
+                dirs.push(buildTree(abs, childRel + path.sep));
+              } else {
+                const fStat = fs.statSync(abs);
+                files.push({
+                  path: childRel,
+                  name: entry,
+                  size: fStat.size,
+                  mtimeMs: fStat.mtimeMs,
+                  checked: entry.endsWith(".sol"),
+                });
+              }
+            });
+
+            // Determine checked / isChildCheck flags
+            const numSol = files.filter((f) => f.checked).length;
+            const numNonSol = files.length - numSol;
+            let checkedDir = false;
+            let isChildCheck = false;
+            if (numSol === 0) {
+              checkedDir = false;
+              isChildCheck = false;
+            } else if (numNonSol === 0) {
+              checkedDir = true;
+              isChildCheck = true;
+            } else {
+              checkedDir = false;
+              isChildCheck = true;
+            }
+
+            return {
+              name,
+              path: relPath + (relPath && !relPath.endsWith(path.sep) ? path.sep : ""),
+              tree: dirs,
+              isChildCheck,
+              checked: checkedDir,
+              blobs: files,
+              size: 0,
+              mtimeMs: stat.mtimeMs,
+            };
+          }
+          // Should not reach here for files as we handle in parent
+        };
+
+        const rootTreeInternal = buildTree(absoluteRoot, "");
+        const responseTree = {
+          name: "",
+          path: "",
+          tree: [rootTreeInternal],
+          isChildCheck: rootTreeInternal.isChildCheck,
+          checked: rootTreeInternal.checked,
+          blobs: [],
+          size: 0,
+          mtimeMs: rootTreeInternal.mtimeMs,
+        };
+
+        socket.send(
+          JSON.stringify({ type: "folderStructure", tree: responseTree })
+        );
+      } else if (action === "zipAndSendFiles") {
+        const presignedUrl = payload.presigned_url;
+        const skip = new Set(payload.skip_file_paths || []);
+        if (!presignedUrl) {
+          socket.send(
+            JSON.stringify({ type: "error", error: "presigned_url missing" })
+          );
+          return;
+        }
+
+        const archive = archiver("zip", { zlib: { level: 9 } });
+        const chunks = [];
+
+        archive.on("data", (chunk) => chunks.push(chunk));
+        archive.on("warning", (err) => {
+          if (err.code !== "ENOENT") {
+            socket.send(JSON.stringify({ type: "error", error: err.message }));
+          }
+        });
+        archive.on("error", (err) => {
+          socket.send(JSON.stringify({ type: "error", error: err.message }));
+        });
+        archive.on("end", async () => {
+          const buffer = Buffer.concat(chunks);
+
+          let success = false;
+          try {
+            if (presignedUrl.startsWith("memory://")) {
+              // test stub
+              success = true;
+            } else {
+              success = await uploadToS3(buffer, presignedUrl);
+            }
+          } catch (e) {
+            success = false;
+          }
+
+          socket.send(
+            JSON.stringify({
+              type: "uploadStatus",
+              success,
+            })
+          );
+        });
+
+        // recursively walk and add files not skipped
+        const walkAdd = (dir, rel = "") => {
+          fs.readdirSync(dir).forEach((entry) => {
+            if (entry === "node_modules") return;
+            const abs = path.join(dir, entry);
+            const relPath = path.join(rel, entry);
+            const relPathPosix = relPath.split(path.sep).join("/");
+            const stat = fs.statSync(abs);
+            if (stat.isDirectory()) {
+              walkAdd(abs, relPath);
+            } else {
+              if (!skip.has(relPathPosix)) {
+                archive.file(abs, { name: relPath });
+              }
+            }
+          });
+        };
+        walkAdd(absoluteRoot, "");
+        archive.finalize();
+      } else {
+        socket.send(
+          JSON.stringify({ type: "error", error: "Unknown action" })
+        );
+      }
+    });
+  });
+
+  return wss;
+}
+
 module.exports = {
   initializeWebSocket,
   createProjectZip,
@@ -240,4 +412,5 @@ module.exports = {
   displayScanSummary,
   showSpinnerWithStatus,
   stopSpinner,
+  startLocalFileServer,
 };

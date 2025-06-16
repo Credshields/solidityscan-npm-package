@@ -4,7 +4,7 @@
   "description": "Test SolidityScan",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "keywords": [
     "Solidity",
@@ -26,5 +26,11 @@
     "path": "^0.12.7",
     "request": "^2.88.2",
     "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "bin": {
+    "solidityscan": "bin/solidityscan.js"
   }
 }
