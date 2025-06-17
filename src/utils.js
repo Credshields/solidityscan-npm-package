@@ -137,7 +137,7 @@ const uploadToS3 = async (fileData, uploadUrl) => {
         "Content-Type": "application/octet-stream",
       },
       // httpsAgent: new https.Agent({  
-      //   rejectUnauthorized: false // Only for this specific request
+      //   rejectUnauthorized: false // Only for local
       // })
     });
     if (response.status === 200) {
