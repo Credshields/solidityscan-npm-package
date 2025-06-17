@@ -4,7 +4,6 @@ const fs = require("fs");
 const path = require("path");
 const archiver = require("archiver");
 const axios = require("axios");
-const https = require("https");
 const Table = require("cli-table3");
 
 const cliSpinners = require("cli-spinners");
