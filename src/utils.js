@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const archiver = require("archiver");
 const axios = require("axios");
+const https = require("https");
 const Table = require("cli-table3");
 
 const cliSpinners = require("cli-spinners");
@@ -135,6 +136,9 @@ const uploadToS3 = async (fileData, uploadUrl) => {
       headers: {
         "Content-Type": "application/octet-stream",
       },
+      // httpsAgent: new https.Agent({  
+      //   rejectUnauthorized: false // Only for this specific request
+      // })
     });
     if (response.status === 200) {
       return true;
@@ -142,6 +146,7 @@ const uploadToS3 = async (fileData, uploadUrl) => {
       return false;
     }
   } catch (error) {
+    console.log("error uploading file>",error)
     return false;
   }
 };
@@ -268,7 +273,15 @@ function startLocalFileServer(rootDirectory, port = 8080) {
             fs.readdirSync(dir).forEach((entry) => {
               if (entry === "node_modules") return;
               const abs = path.join(dir, entry);
-              const childRel = path.join(relPath, entry);
+              const rootName = path.basename(absoluteRoot);
+              
+              let childRel;
+              if (relPath === "") {
+                childRel = path.join(rootName, entry);
+              } else {
+                childRel = path.join(relPath, entry);
+              }
+              
               if (fs.statSync(abs).isDirectory()) {
                 dirs.push(buildTree(abs, childRel + path.sep));
               } else {
@@ -299,9 +312,16 @@ function startLocalFileServer(rootDirectory, port = 8080) {
               isChildCheck = true;
             }
 
+            let dirPath;
+            if (dir === absoluteRoot) {
+              dirPath = path.basename(absoluteRoot) + "/";
+            } else {
+              dirPath = relPath + (relPath && !relPath.endsWith(path.sep) ? path.sep : "");
+            }
+            
             return {
               name,
-              path: relPath + (relPath && !relPath.endsWith(path.sep) ? path.sep : ""),
+              path: dirPath,
               tree: dirs,
               isChildCheck,
               checked: checkedDir,
@@ -362,6 +382,7 @@ function startLocalFileServer(rootDirectory, port = 8080) {
               success = await uploadToS3(buffer, presignedUrl);
             }
           } catch (e) {
+            console.log("error uploading file",e)
             success = false;
           }
 
