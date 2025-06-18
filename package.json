@@ -1,7 +1,7 @@
 {
-  "name": "solidityscan-npm-test",
-  "version": "1.0.0",
-  "description": "Test SolidityScan",
+  "name": "solidityscan",
+  "version": "0.1.0",
+  "description": "SolidityScan is a tool for scanning Solidity smart contracts for vulnerabilities.",
   "main": "index.js",
   "scripts": {
     "test": "jest"
@@ -32,5 +32,13 @@
   },
   "bin": {
     "solidityscan": "bin/solidityscan.js"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Credshields/solidityscan-npm-package"
+  },
+  "bugs": {
+    "url": "https://github.com/Credshields/solidityscan-npm-package/issues"
+  },
+  "homepage": "https://github.com/Credshields/solidityscan-npm-package#readme"
 }
