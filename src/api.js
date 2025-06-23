@@ -18,14 +18,14 @@ async function contractScan(contractPayload, apiToken) {
   const request_payload = {
     action: "message",
     payload: {
-      type: "private_block_scan_initiate",
+      type: "private_threat_scan_initiate",
       body: contractPayload,
     },
   };
   return utils.initializeWebSocket(apiToken, request_payload);
 }
 
-async function analyzeProject(projectDirectory, apiToken) {
+async function analyzeProject(projectDirectory, apiToken, projectName) {
   try {
     const initializingSpinner = await utils.showSpinnerWithStatus(
       "Initializing Scan",
@@ -49,7 +49,7 @@ async function analyzeProject(projectDirectory, apiToken) {
           type: "private_project_scan_initiate",
           body: {
             file_urls: [uploadUrl],
-            project_name: "fileName",
+            project_name: projectName,
             project_visibility: "public",
             project_type: "new",
           },

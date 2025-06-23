@@ -1,3 +1,4 @@
+const { default: axios } = require("axios");
 const { projectScan, contractScan, analyzeProject } = require("./api");
 const utils = require("./utils");
 
@@ -39,42 +40,65 @@ function scan() {
       const contractAddress = args[2];
       const contractChain = args[3];
       const contractPlatform = args[4];
-      const apiKey = process.env.SOLIDITYSCAN_API_KEY || args[5];
+      const cliProvidedToken = args[5]; // CLI provided token
 
       if (!contractAddress || !contractChain || !contractPlatform) {
-        console.error("Usage: solisityscan scan <projectUrl> <branch>");
+        console.error("Usage: solisityscan scan contract <address> <chain> <platform> [apiToken]");
         process.exit(1);
       }
 
-      const payload = {
-        contract_address: contractAddress,
-        contract_platform: contractPlatform,
-        contract_chain: contractPlatform,
-      };
+      try {
+        // Get API token from environment or command line
+        const apiToken = process.env.SOLIDITYSCAN_API_KEY || cliProvidedToken;
+        if (!apiToken) {
+          console.error("No API token provided. Please set SOLIDITYSCAN_API_KEY environment variable or provide token as argument.");
+          process.exit(1);
+        }
 
-      contractScan(payload, apiKey)
-        .then((results) => {
-          console.log("Scan results:", results);
-        })
-        .catch((error) => {
-          console.error("Error during scan:", error);
-        });
+        const payload = {
+          contract_address: contractAddress,
+          contract_platform: contractPlatform,
+          contract_chain: contractChain, 
+        };
+
+        contractScan(payload, apiToken)
+          .then((results) => {
+            console.log("Scan results:",JSON.stringify(results, null, 2));
+          })
+          .catch((error) => {
+            console.error("\nError during scan:", error);
+          });
+      } catch (error) {
+        console.error("\nError with API token:", error);
+        process.exit(1);
+      }
     }
-  } else if (args[0] === "test") {
+  } else if (args[0] === "local") {
     const projectPath = args[1];
+    const apiKeyFromArgs = args[2] && !process.env.SOLIDITYSCAN_API_KEY;
     const apiKey = process.env.SOLIDITYSCAN_API_KEY || args[2];
+    const projectName = apiKeyFromArgs ? args[3] : args[2];
 
     if (!projectPath) {
       console.error("Usage: solisityscan run-tests <projectPath>");
       process.exit(1);
     }
 
-    analyzeProject(projectPath, apiKey)
+    analyzeProject(projectPath, apiKey, projectName)
       .then((results) => {
-        utils.displayScanResults(results);
-        console.log("");
-        console.log("Scan Summary");
-        utils.displayScanSummary(results);
+        if(results?.scan_details?.link){
+        axios.get(results.scan_details.link, {
+            httpsAgent: new (require('https').Agent)({
+              rejectUnauthorized: false
+            })
+          })
+          .then((response) => {
+            utils.displayScanResults(response.data.scan_report);
+          })
+          .catch((error) => {
+            console.error("Error during scan:", error);
+          });
+        }
       })
       .catch((error) => {
         console.error("Error during scan:", error);

@@ -10,69 +10,136 @@ const cliSpinners = require("cli-spinners");
 const spinner = cliSpinners.dots;
 
 const getApi = (apiToken) => {
+  const apiBaseUrl = "https://api.solidityscan.com/";
   if (apiToken) {
-    return axios.create({
-      baseURL: "https://api-develop.solidityscan.com/",
+    const instance = axios.create({
+      baseURL: apiBaseUrl,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiToken}`,
-        "CF-Access-Client-Secret": "",
-        "CF-Access-Client-Id": "",
+        "accept": "application/json, text/plain, */*",
+        "Authorization": `Bearer ${apiToken}`,
+        "cache-control": "no-cache",
       },
+      httpsAgent: new (require('https').Agent)({
+        rejectUnauthorized: false
+      })
     });
+    return instance;
   } else {
-    return axios.create({
-      baseURL: "https://api-develop.solidityscan.com/",
+    const instance = axios.create({
+      baseURL: apiBaseUrl,
       headers: {
         "Content-Type": "application/json",
         "CF-Access-Client-Secret": "",
         "CF-Access-Client-Id": "",
       },
+      httpsAgent: new (require('https').Agent)({
+        rejectUnauthorized: false
+      })
     });
+    return instance;
   }
 };
 
 const initializeWebSocket = (apiToken, payload, spinner) => {
-  const wsUrl = `${"wss://api-ws-stage.solidityscan.com/stage"}${
-    apiToken ? `?auth_token=${apiToken}` : ""
-  }`;
-  const ws = new WebSocket(wsUrl);
+  const wsUrl = 'wss://api-ws.solidityscan.com/';
+    const ws = new WebSocket(wsUrl, {
+    rejectUnauthorized: false 
+  });
+  
+  const emitMessage = (messagePayload) => {
+    ws.send(
+      JSON.stringify({
+        action: "message",
+        payload: messagePayload,
+      })
+    );
+  };
 
   return new Promise((resolve, reject) => {
+    const connectionTimeout = setTimeout(() => {
+      ws.close();
+      reject(new Error("WebSocket connection timed out waiting for scan results"));
+    }, 60000); // 60 second timeout
     ws.on("open", () => {
-      ws.send(
-        JSON.stringify({
-          action: "message",
-          payload: payload,
-        })
-      );
+      if (apiToken) {
+        emitMessage({
+          type: "auth_token_register",
+          body: {
+            auth_token: apiToken,
+          },
+        });
+      } else {
+        console.log("No authentication token provided, sending payload directly");
+        emitMessage(payload);
+      }
     });
 
     ws.on("message", (data) => {
-      const receivedMessage = JSON.parse(data);
-      if (receivedMessage.type === "error") {
-        ws.close();
-        reject(receivedMessage.payload.payload.error_message);
-      } else if (receivedMessage.type === "scan_status") {
-        if (receivedMessage.payload.scan_status === "scan_done") {
-          request.get(
-            receivedMessage.payload.scan_details.link,
-            (error, response, body) => {
-              if (error) {
-                resolve(error);
-              } else if (response.statusCode !== 200) {
-                resolve(error);
-              } else {
-                const scan_result = JSON.parse(body);
-                resolve(scan_result.scan_report);
-              }
-              stopSpinner(spinner, "Scan in progress");
-              ws.close();
-            }
-          );
+      try {
+        const receivedMessage = JSON.parse(data);
+        clearTimeout(connectionTimeout);        
+        if (receivedMessage.type === "auth_token_register") {
+         
+          if (payload.payload) {
+            emitMessage(payload.payload);
+          } else {
+            emitMessage(payload);
+          }
+        } 
+        else if (receivedMessage.type === "scan_status") {
+          if (receivedMessage.payload?.scan_status === "scan_done") {
+            resolve(receivedMessage.payload);
+            if (spinner) stopSpinner(spinner, "Scan in progress");
+            ws.close();
+          }
         }
+        else if (receivedMessage.type === "quick_scan_status") {
+          if (receivedMessage.payload?.scan_status === "scan_done") {
+            resolve(receivedMessage.payload);
+            if (spinner) stopSpinner(spinner, "Scan in progress");
+            ws.close();
+          } else {
+            console.log(`\n[WebSocket] Waiting for scan to complete. Current status: ${receivedMessage.payload?.scan_status || receivedMessage.payload?.quick_scan_status || 'processing'}`);
+          }
+        }
+        else if (receivedMessage.type === "quick_scan_result") {          
+          if (receivedMessage.payload?.scan_details?.link) {
+            request.get(
+              receivedMessage.payload.scan_details.link,
+              (error, response, body) => {
+                if (error) {
+                  resolve(error);
+                } else if (response.statusCode !== 200) {
+                  resolve(error);
+                } else {
+                  try {
+                    const scan_result = JSON.parse(body);
+                    resolve(scan_result.scan_report || scan_result);
+                  } catch (e) {
+                    resolve(body); 
+                  }
+                }
+                if (spinner) stopSpinner(spinner, "Scan in progress");
+                ws.close();
+              }
+            );
+          }
+        } 
+        else if (receivedMessage.type === "error") {
+          console.log("\n Error received from server:", receivedMessage.payload?.payload?.error_message || receivedMessage.payload?.error_message || "Unknown error");
+          ws.close();
+          reject(receivedMessage.payload?.payload?.error_message || receivedMessage.payload?.error_message || "Unknown error from server");
+        }
+        else {
+          if (spinner) {
+            process.stdout.write("."); 
+          }
+        }
+      } catch (error) {
+        console.error("\nError processing message:", error);
+        console.error("\nRaw message data:", data.toString());
       }
-      console.log(receivedMessage);
     });
 
     ws.on("error", (error) => {
@@ -119,13 +186,17 @@ const createProjectZip = async (projectDirectory) => {
 };
 
 const getUploadPresignedUrl = async (fileName, apiToken) => {
-  const apiUrl = `private/api-get-presigned-url/?file_name=${fileName}`;
-  const API = getApi(apiToken);
-  const response = await API.get(apiUrl);
-  if (response.status === 200 && response.data && response.data.result) {
-    return response.data.result.url;
-  } else {
-    return null;
+  try {
+    const apiUrl = `private/api-get-presigned-url/?file_name=${fileName}`;
+    const API = getApi(apiToken);
+    const response = await API.get(apiUrl);
+    if (response.status === 200 && response.data && response.data.result) {
+      return response.data.result.url;
+    } else {
+      return null;
+    }
+  } catch (error) {
+    throw new Error(`Failed to get presigned URL: ${error.message}`);
   }
 };
 
@@ -135,17 +206,17 @@ const uploadToS3 = async (fileData, uploadUrl) => {
       headers: {
         "Content-Type": "application/octet-stream",
       },
-      // httpsAgent: new https.Agent({  
-      //   rejectUnauthorized: false // Only for local
-      // })
+      httpsAgent: new (require('https').Agent)({  
+        rejectUnauthorized: false 
+      })
     });
-    if (response.status === 200) {
+        
+    if (response.status === 200 || response.status === 204) {
       return true;
     } else {
       return false;
     }
   } catch (error) {
-    console.log("error uploading file>",error)
     return false;
   }
 };
@@ -154,29 +225,64 @@ function capitalizeFirstLetter(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+function formatHtmlForTerminal(htmlContent) {
+  if (!htmlContent) return '';
+  let text = htmlContent.replace(/<br\s*\/?>/gi, '\n');
+  text = text.replace(/<code>(.*?)<\/code>/gi, '`$1`');
+  text = text.replace(/<\/?[^>]+(>|$)/g, '');
+  text = text.replace(/\s+/g, ' ').trim();
+
+  return text;
+}
+
 const displayScanResults = (scan) => {
   const table = new Table({
-    head: ["Issue Name", "Issue Severity", "File Path", "Line No."],
+    head: ["#", "NAME", "SEVERITY", "CONFIDENCE", "DESCRIPTION", "REMEDIATION"],
+    chars: {
+      'top': '─', 'top-mid': '┬', 'top-left': '┌', 'top-right': '┐',
+      'bottom': '─', 'bottom-mid': '┴', 'bottom-left': '└', 'bottom-right': '┘',
+      'left': '│', 'left-mid': '├', 'mid': '─', 'mid-mid': '┼',
+      'right': '│', 'right-mid': '┤', 'middle': '│'
+    },
+    style: {
+      head: ['bold']
+    },
+    // Configure optimal column widths
+    colWidths: [5, 20, 12, 12, 35, 35],
+    wordWrap: true
   });
 
+  let issueCount = 0;
   scan.multi_file_scan_details.forEach((detail) => {
     const { template_details } = detail;
     if (detail.metric_wise_aggregated_findings) {
       detail.metric_wise_aggregated_findings.forEach((bug) => {
+        issueCount++;
         const filePath = bug.findings[0].file_path;
-        const line = `L${bug.findings[0].line_nos_start} - L${bug.findings[0].line_nos_end}`;
+        const location = `${filePath.replace("/project", "")}\nL${bug.findings[0].line_nos_start} - L${bug.findings[0].line_nos_end}`;
+        const description = formatHtmlForTerminal(template_details.issue_description);
+        const fullDescription = `${description}\n\nLocation:\n${location}`;
+        
         const row = [
+          `${issueCount}.`,
           template_details.issue_name,
           capitalizeFirstLetter(template_details.issue_severity),
-          filePath.replace("/project", ""),
-          line,
+          template_details.issue_confidence,
+          fullDescription,
+          formatHtmlForTerminal(template_details.issue_remediation)
         ];
         table.push(row);
       });
     }
   });
 
-  console.log(table.toString());
+  if (issueCount === 0) {
+    console.log('No security issues found!');
+  } else {
+    console.log('SECURITY SCAN RESULTS:');
+    console.log(table.toString());
+    console.log(`Found ${issueCount} security ${issueCount === 1 ? 'issue' : 'issues'}.`);
+  }
 };
 
 const displayScanSummary = (scan) => {
