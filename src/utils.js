@@ -19,10 +19,7 @@ const getApi = (apiToken) => {
         "accept": "application/json, text/plain, */*",
         "Authorization": `Bearer ${apiToken}`,
         "cache-control": "no-cache",
-      },
-      httpsAgent: new (require('https').Agent)({
-        rejectUnauthorized: false
-      })
+      }
     });
     return instance;
   } else {
@@ -32,10 +29,7 @@ const getApi = (apiToken) => {
         "Content-Type": "application/json",
         "CF-Access-Client-Secret": "",
         "CF-Access-Client-Id": "",
-      },
-      httpsAgent: new (require('https').Agent)({
-        rejectUnauthorized: false
-      })
+      }
     });
     return instance;
   }
@@ -205,10 +199,7 @@ const uploadToS3 = async (fileData, uploadUrl) => {
     const response = await axios.put(uploadUrl, fileData, {
       headers: {
         "Content-Type": "application/octet-stream",
-      },
-      httpsAgent: new (require('https').Agent)({  
-        rejectUnauthorized: false 
-      })
+      }
     });
         
     if (response.status === 200 || response.status === 204) {

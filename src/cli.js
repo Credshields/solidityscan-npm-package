@@ -87,11 +87,7 @@ function scan() {
     analyzeProject(projectPath, apiKey, projectName)
       .then((results) => {
         if(results?.scan_details?.link){
-        axios.get(results.scan_details.link, {
-            httpsAgent: new (require('https').Agent)({
-              rejectUnauthorized: false
-            })
-          })
+        axios.get(results.scan_details.link)
           .then((response) => {
             utils.displayScanResults(response.data.scan_report);
           })
