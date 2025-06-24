@@ -79,12 +79,16 @@ function scan() {
     const apiKey = process.env.SOLIDITYSCAN_API_KEY || args[2];
     const projectName = apiKeyFromArgs ? args[3] : args[2];
 
+    if(!projectName){
+      projectName = "LocalScan";
+    }
+
     if (!projectPath) {
       console.error("Usage: solisityscan run-tests <projectPath>");
       process.exit(1);
     }
 
-    analyzeProject(projectPath, apiKey, projectName="LocalScan")
+    analyzeProject(projectPath, apiKey, projectName)
       .then((results) => {
         if(results?.scan_details?.link){
         axios.get(results.scan_details.link)

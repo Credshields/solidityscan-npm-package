@@ -1,6 +1,6 @@
 {
   "name": "solidityscan",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "description": "SolidityScan is a tool for scanning Solidity smart contracts for vulnerabilities.",
   "main": "index.js",
   "scripts": {
