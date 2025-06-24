@@ -1,6 +1,6 @@
 {
   "name": "solidityscan",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "SolidityScan is a tool for scanning Solidity smart contracts for vulnerabilities.",
   "main": "index.js",
   "scripts": {
@@ -36,7 +36,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Credshields/solidityscan-npm-package"
+    "url": "git+https://github.com/Credshields/solidityscan-npm-package.git"
   },
   "bugs": {
     "url": "https://github.com/Credshields/solidityscan-npm-package/issues"
