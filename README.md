@@ -10,8 +10,6 @@ Secure your Solidity smart contracts straight from your terminal or JavaScript c
 2. [Installation](#installation)
 3. [Getting an API Key](#getting-an-api-key)
 4. [CLI Usage](#cli-usage)
-   * [Scan a remote project](#scan-a-remote-project)
-   * [Scan a contract address](#scan-a-contract-address)
    * [Scan a local directory](#scan-a-local-directory)
    * [Run a local file server](#run-a-local-file-server)
 5. [Programmatic Usage](#programmatic-usage)
@@ -23,7 +21,6 @@ Secure your Solidity smart contracts straight from your terminal or JavaScript c
 
 ## Features
 
-• 🔍 **Project & Contract Scanning** – Analyse entire Git repositories or individual contract addresses for known vulnerabilities.<br/>
 • 📦 **Local Directory Scanning** – Zip and upload your local Solidity source code and get instant feedback in the terminal.<br/>
 • ⚡ **Real-time Progress** – Live WebSocket updates with an elegant spinner so you always know the scan status.<br/>
 • 📋 **Readable Reports** – Vulnerabilities and severities are displayed in coloured, column-aligned tables, followed by a concise scan summary.
@@ -64,37 +61,6 @@ export SOLIDITYSCAN_API_KEY="YOUR_API_KEY"
 After installing globally you will have a `solidityscan` binary in your PATH.
 Run `solidityscan --help` to view the brief usage guide.
 
-### Scan a Remote Project
-
-```bash
-solidityscan scan project <provider> <repo-url> <branch> <project-name> <api-key?> [recurScan]
-# Example
-solidityscan scan project github https://github.com/Credshields/solidityscan-npm-package main DemoProject $SOLIDITYSCAN_API_KEY
-```
-
-Arguments:
-
-1. `provider`           – Currently supported: `github` (more coming soon).
-2. `repo-url`           – HTTPS or SSH URL of the repository.
-3. `branch`             – Branch to scan (e.g. `main`).
-4. `project-name`       – Friendly name that will appear in the dashboard.
-5. `api-key` *(optional)* – Falls back to `SOLIDITYSCAN_API_KEY` env var.
-6. `recurScan` *(optional)* – `true` to enable recurring scans.
-
----
-
-### Scan a Contract Address
-
-```bash
-solidityscan scan contract <address> <chain> <platform> <api-key?>
-# Example
-solidityscan scan contract 0x1234... ethereum evm $SOLIDITYSCAN_API_KEY
-```
-
-* `address`  – Deployed contract address.
-* `chain`    – Network/chain identifier, e.g. `ethereum`, `polygon`.
-* `platform` – Platform indicator such as `evm`.
-
 ---
 
 ### Scan a Local Directory
@@ -131,37 +97,13 @@ const solidityscan = require("solidityscan");
 (async () => {
   const apiToken = process.env.SOLIDITYSCAN_API_KEY;
 
-  // 1. Scan a Git repository
-  const projectPayload = {
-    provider: "github",
-    project_url: "https://github.com/Credshields/awesome-contracts",
-    project_name: "AwesomeContracts",
-    project_branch: "main",
-    recur_scans: false,
-    skip_file_paths: [],
-  };
-  const repoScanResult = await solidityscan.projectScan(projectPayload, apiToken);
-  console.log(repoScanResult);
-
-  // 2. Scan a contract address
-  const contractPayload = {
-    contract_address: "0x1234...",
-    contract_chain: "ethereum",
-    contract_platform: "evm",
-  };
-  const contractScanResult = await solidityscan.contractScan(contractPayload, apiToken);
-  console.log(contractScanResult);
-
-  // 3. Scan a local directory (same behaviour as CLI `test`)
+  // Scan a local directory (same behaviour as CLI `test`)
   await solidityscan.runTests("./contracts", apiToken);
 })();
 ```
 
 Available exported helpers:
 
-* `projectScan(payload, apiToken)`
-* `contractScan(payload, apiToken)`
-* `analyseProject(directoryPath, apiToken)`
 * `runTests(directoryPath, apiToken)`
 * `scan()` – executes the CLI with current `process.argv` (internally used by the binary).
 

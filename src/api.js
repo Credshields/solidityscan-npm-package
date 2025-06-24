@@ -18,14 +18,14 @@ async function contractScan(contractPayload, apiToken) {
   const request_payload = {
     action: "message",
     payload: {
-      type: "private_block_scan_initiate",
+      type: "private_threat_scan_initiate",
       body: contractPayload,
     },
   };
   return utils.initializeWebSocket(apiToken, request_payload);
 }
 
-async function analyzeProject(projectDirectory, apiToken) {
+async function analyzeProject(projectDirectory, apiToken, projectName, isRunningTest = false) {  
   try {
     const initializingSpinner = await utils.showSpinnerWithStatus(
       "Initializing Scan",
@@ -49,7 +49,7 @@ async function analyzeProject(projectDirectory, apiToken) {
           type: "private_project_scan_initiate",
           body: {
             file_urls: [uploadUrl],
-            project_name: "fileName",
+            project_name: projectName,
             project_visibility: "public",
             project_type: "new",
           },
@@ -69,17 +69,41 @@ async function analyzeProject(projectDirectory, apiToken) {
   }
 }
 
-async function runTests(projectDirectory, apiToken) {
-  analyzeProject(projectDirectory, apiToken)
-    .then((results) => {
-      utils.displayScanResults(results);
-      console.log("");
-      console.log("Scan Summary");
-      utils.displayScanSummary(results);
-    })
-    .catch((error) => {
-      console.error("Error during scan:", error);
-    });
+async function runTests(projectDirectory, apiToken, projectName) {
+  try {
+    const results = await analyzeProject(projectDirectory, apiToken, projectName, true);
+    
+    if (results && results.scan_details && results.scan_details.link) {
+      const axios = require('axios');
+      const response = await axios.get(results.scan_details.link, {
+        httpsAgent: new (require('https').Agent)({
+          rejectUnauthorized: false
+        })
+      });
+      
+      const scanData = response.data;
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `scan-result-${results.scan_id}-${timestamp}.json`;
+      
+      fs.writeFileSync(filename, JSON.stringify(scanData, null, 2));
+      console.log(`\nScan results saved to: ${filename}`);
+      
+      return {
+        metadata: results,
+        scanDetails: scanData,
+        resultFile: filename
+      };
+    } else {
+      console.error("Error: Scan results link not found in the response");
+      return results; 
+    }
+  } catch (error) {
+    console.error("Error during scan:", error.message);
+    if (error.response) {
+      console.error("API response error:", error.response.data);
+    }
+    throw error;
+  }
 }
 
 module.exports = {
