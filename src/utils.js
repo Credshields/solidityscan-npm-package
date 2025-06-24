@@ -243,6 +243,9 @@ const displayScanResults = (scan) => {
     wordWrap: true
   });
 
+  console.log("scan===>",scan);
+  
+
   let issueCount = 0;
   scan.multi_file_scan_details.forEach((detail) => {
     const { template_details } = detail;
