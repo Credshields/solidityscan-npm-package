@@ -241,10 +241,7 @@ const displayScanResults = (scan) => {
     // Configure optimal column widths
     colWidths: [5, 20, 12, 12, 35, 35],
     wordWrap: true
-  });
-
-  console.log("scan===>",scan);
-  
+  });  
 
   let issueCount = 0;
   scan.multi_file_scan_details.forEach((detail) => {
