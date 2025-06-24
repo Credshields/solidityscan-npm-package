@@ -68,7 +68,7 @@ Run `solidityscan --help` to view the brief usage guide.
 Analyse a local folder containing `.sol` files. The tool packages the Solidity source, uploads it, waits for the scan to finish and prints the results.
 
 ```bash
-solidityscan test /path/to/my/contracts [api-key]
+solidityscan local /path/to/my/contracts [api-key]
 ```
 
 ---
