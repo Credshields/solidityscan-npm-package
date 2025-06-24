@@ -84,7 +84,7 @@ function scan() {
       process.exit(1);
     }
 
-    analyzeProject(projectPath, apiKey, projectName)
+    analyzeProject(projectPath, apiKey, projectName="LocalScan")
       .then((results) => {
         if(results?.scan_details?.link){
         axios.get(results.scan_details.link)
