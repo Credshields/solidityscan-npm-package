@@ -85,15 +85,24 @@ If no project name is provided, it will default to "LocalScan".
 
 ### Run a Local File Server
 
-Start a WebSocket file server to expose your local directory to the SolidityScan web-UI (handy for visually picking files).
+Start a WebSocket file server to expose your local directory to the SolidityScan web-UI
+A unique **identifier** (\`--id\`) is mandatory – this becomes the sub-domain of the temporary public URL.
 
 ```bash
-# Serve current directory on default port 8080
-solidityscan -l
+# Serve current directory on default port 9462 (or 9463-9466 if 9462 is busy)
+solidityscan -l --id <id-from-solidityscan>
 
-# Serve a custom directory on port 9090
-solidityscan -l -p /my/contracts --port 9090
+# Serve a specific directory
+solidityscan -l -p /my/contracts --id <id-from-solidityscan>
+
+# Bind to an explicit port instead of the automatic range
+solidityscan -l -p ./src --id <id-from-solidityscan> --port 9000
 ```
+
+Behaviour notes:
+
+* If **--port** is omitted the CLI tries to bind to 9462 and, if in use, increments the port up to 5 times (9462-9466).
+* The **identifier** should be exactly the string shown on SolidityScan's **Connect&nbsp;to&nbsp;Localhost** page – copy it from the web-UI and use it with `--id`.
 
 ---
 

@@ -339,10 +339,16 @@ function startLocalFileServer(rootDirectory, port = 8080) {
   }
 
   const absoluteRoot = path.resolve(rootDirectory);
-  const wss = new WebSocket.Server({ port });
+  const wss = new WebSocket.Server({ port, verifyClient: (info, done) => {
+    if (!originIsAllowed(info.origin)) {
+      done(false)
+      console.log(`Connection from origin  ${info.origin} is not allowed`)
+      return
+    }
+    done(true)
+  } });
 
-  // eslint-disable-next-line no-console
-  console.log(`SolidityScan local file server started on ws://localhost:${wss.options.port}\nServing directory: ${absoluteRoot}`);
+  console.log(`SolidityScan local file server started\nServing directory: ${absoluteRoot}`);
 
   wss.on("connection", (socket) => {
     socket.on("message", async (raw) => {
@@ -446,6 +452,12 @@ function startLocalFileServer(rootDirectory, port = 8080) {
         );
       } else if (action === "zipAndSendFiles") {
         const presignedUrl = payload.presigned_url;
+        if (!originIsAllowed(payload.origin)) {
+          socket.send(
+            JSON.stringify({ type: "error", error: "origin not allowed" })
+          );
+          return;
+        }
         const skip = new Set(payload.skip_file_paths || []);
         if (!presignedUrl) {
           socket.send(
@@ -518,6 +530,15 @@ function startLocalFileServer(rootDirectory, port = 8080) {
   });
 
   return wss;
+}
+function getDomain (url) {
+  const domainMatch = url.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/img)
+  return domainMatch ? domainMatch[0] : null
+}
+function originIsAllowed (origin) {
+  const DOMAIN = getDomain(origin)
+  const allowedOrigins = ["https://solidityscan.com","https://develop.solidityscan.com", "https://credshields-prod.s3.amazonaws.com", "https://credshields-dev.s3.amazonaws.com/"]
+  return allowedOrigins.includes(DOMAIN)
 }
 
 module.exports = {

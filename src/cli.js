@@ -104,78 +104,76 @@ function scan() {
         console.error("Error during scan:", error);
       });
   } else if (args.includes("-l")) {
-    // Start local WebSocket file server to expose file system
+
     const dirFlagIndex = args.indexOf("-p");
     const serveDirectory =
       dirFlagIndex !== -1 && args[dirFlagIndex + 1]
         ? args[dirFlagIndex + 1]
         : process.cwd();
 
+  
     const portFlagIndex = args.indexOf("--port");
-    const port =
+    const userSpecifiedPort =
       portFlagIndex !== -1 && args[portFlagIndex + 1]
         ? parseInt(args[portFlagIndex + 1], 10)
-        : 8080;
-    
-    const useTunnel = args.includes("--secure-tunnel");
-    const tunnelSubdomain = args.indexOf("--subdomain") !== -1 ? args[args.indexOf("--subdomain") + 1] : null;
+        : null;
 
-    try {
-      const wss = utils.startLocalFileServer(serveDirectory, port);
-      
-      if (useTunnel) {
-        try {
-          console.log('Creating secure tunnel to expose local server...');
-          const localtunnel = require('localtunnel');
-          const tunnelOptions = {};
-          
-          if (tunnelSubdomain) {
-            tunnelOptions.subdomain = tunnelSubdomain;
-            console.log(`Attempting to use requested subdomain: ${tunnelSubdomain}`);
-          }
-          
-          const dots = ['.', '..', '...', '....'];
-          let dotIndex = 0;
-          const loadingInterval = setInterval(() => {
-            process.stdout.write(`\rEstablishing secure tunnel${dots[dotIndex % dots.length]}     `);
-            dotIndex++;
-          }, 500);
-          
-          (async () => {
-            try {
-              const tunnel = await localtunnel({ port, ...tunnelOptions });
-              clearInterval(loadingInterval); 
-              process.stdout.write('\r'); 
-              
-              console.log(`SolidityScan secure tunnel established!`);
-              console.log(`HTTPS URL: ${tunnel.url}`);
-              console.log(`WebSocket URL: ${tunnel.url.replace('https://', 'wss://')}`);
-              
-              tunnel.on('close', () => {
-                console.log('\nTunnel closed');
-              });
-              
-              tunnel.on('error', (err) => {
-                console.error('\nTunnel error:', err);
-              });
-            } catch (tunnelError) {
-              clearInterval(loadingInterval); 
-              process.stdout.write('\r'); 
-              console.error('Failed to create tunnel:', tunnelError.message);
-              console.log('Local server is still running on ws://localhost:' + port + ' without secure tunnel');
-              console.log('Try again or check your network connection');
-            }
-          })();
-        } catch (requireError) {
-          console.error('Could not load localtunnel module:', requireError.message);
-          console.log('Make sure localtunnel is installed: npm install --save localtunnel');
-        }
-      }
-    } catch (error) {
-      console.error(error.message);
+    const idFlagIndex = args.indexOf("--id");
+    const tunnelId =
+      idFlagIndex !== -1 && args[idFlagIndex + 1]
+        ? args[idFlagIndex + 1]
+        : null;
+
+    if (!tunnelId) {
+      console.error("Missing --id <alphanumeric> argument");
       process.exit(1);
     }
-    // keep the process alive when in local server mode
+
+    let portAttempts = 0;
+    let port = userSpecifiedPort || 9462;
+    let wss;
+
+    while (portAttempts < 5) {
+      try {
+        wss = utils.startLocalFileServer(serveDirectory, port);
+        break; // success
+      } catch (err) {
+        
+        if (userSpecifiedPort || err.code !== "EADDRINUSE") {
+          console.error(err.message || "Failed to start local server");
+          process.exit(1);
+        }
+        port += 1;
+        portAttempts += 1;
+      }
+    }
+
+    if (!wss) {
+      console.error("Could not bind to any port between 9462 and 9466");
+      process.exit(1);
+    }
+
+    (async () => {
+      try {
+        const localtunnel = require("localtunnel");
+        const tunnel = await localtunnel({ port, subdomain: tunnelId });
+
+        const clean = () => {
+          try {
+            tunnel.close();
+          } catch (_) {}
+          try {
+            if (wss) wss.close();
+          } catch (_) {}
+          process.exit(0);
+        };
+        process.on("SIGINT", clean);
+        process.on("SIGTERM", clean);
+      } catch (e) {
+        console.error("Error during tunnel:", e);
+      }
+    })();
+
     return;
   } else {
     console.error(
