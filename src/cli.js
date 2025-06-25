@@ -116,9 +116,61 @@ function scan() {
       portFlagIndex !== -1 && args[portFlagIndex + 1]
         ? parseInt(args[portFlagIndex + 1], 10)
         : 8080;
+    
+    const useTunnel = args.includes("--secure-tunnel");
+    const tunnelSubdomain = args.indexOf("--subdomain") !== -1 ? args[args.indexOf("--subdomain") + 1] : null;
 
     try {
-      utils.startLocalFileServer(serveDirectory, port);
+      const wss = utils.startLocalFileServer(serveDirectory, port);
+      
+      if (useTunnel) {
+        try {
+          console.log('Creating secure tunnel to expose local server...');
+          const localtunnel = require('localtunnel');
+          const tunnelOptions = {};
+          
+          if (tunnelSubdomain) {
+            tunnelOptions.subdomain = tunnelSubdomain;
+            console.log(`Attempting to use requested subdomain: ${tunnelSubdomain}`);
+          }
+          
+          const dots = ['.', '..', '...', '....'];
+          let dotIndex = 0;
+          const loadingInterval = setInterval(() => {
+            process.stdout.write(`\rEstablishing secure tunnel${dots[dotIndex % dots.length]}     `);
+            dotIndex++;
+          }, 500);
+          
+          (async () => {
+            try {
+              const tunnel = await localtunnel({ port, ...tunnelOptions });
+              clearInterval(loadingInterval); 
+              process.stdout.write('\r'); 
+              
+              console.log(`SolidityScan secure tunnel established!`);
+              console.log(`HTTPS URL: ${tunnel.url}`);
+              console.log(`WebSocket URL: ${tunnel.url.replace('https://', 'wss://')}`);
+              
+              tunnel.on('close', () => {
+                console.log('\nTunnel closed');
+              });
+              
+              tunnel.on('error', (err) => {
+                console.error('\nTunnel error:', err);
+              });
+            } catch (tunnelError) {
+              clearInterval(loadingInterval); 
+              process.stdout.write('\r'); 
+              console.error('Failed to create tunnel:', tunnelError.message);
+              console.log('Local server is still running on ws://localhost:' + port + ' without secure tunnel');
+              console.log('Try again or check your network connection');
+            }
+          })();
+        } catch (requireError) {
+          console.error('Could not load localtunnel module:', requireError.message);
+          console.log('Make sure localtunnel is installed: npm install --save localtunnel');
+        }
+      }
     } catch (error) {
       console.error(error.message);
       process.exit(1);

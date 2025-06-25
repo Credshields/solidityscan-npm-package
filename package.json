@@ -24,6 +24,7 @@
     "cli-table3": "^0.6.3",
     "dotenv": "^16.5.0",
     "fs": "^0.0.1-security",
+    "localtunnel": "^2.0.2",
     "path": "^0.12.7",
     "request": "^2.88.2",
     "ws": "^8.16.0"
