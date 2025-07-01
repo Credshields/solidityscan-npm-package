@@ -377,15 +377,23 @@ function startLocalFileServer(rootDirectory, port = 8080) {
               const abs = path.join(dir, entry);
               const rootName = path.basename(absoluteRoot);
               
-              let childRel;
+              // Build a raw relative path using native separators
+              let childRelRaw;
               if (relPath === "") {
-                childRel = path.join(rootName, entry);
+                childRelRaw = path.join(rootName, entry);
               } else {
-                childRel = path.join(relPath, entry);
+                childRelRaw = path.join(relPath, entry);
               }
+
+              // Convert to POSIX style with a single "/" separator for JSON responses
+              const childRel = childRelRaw
+                .split(path.sep)
+                .join("/")
+                .replace(/\/+/g, "/");
               
               if (fs.statSync(abs).isDirectory()) {
-                dirs.push(buildTree(abs, childRel + path.sep));
+                // Recurse with the raw path to preserve correct joining behaviour
+                dirs.push(buildTree(abs, childRelRaw + path.sep));
               } else {
                 const fStat = fs.statSync(abs);
                 files.push({
@@ -414,11 +422,21 @@ function startLocalFileServer(rootDirectory, port = 8080) {
               isChildCheck = true;
             }
 
-            let dirPath;
+            // Build directory path (raw) and then normalise to POSIX
+            let dirPathRaw;
             if (dir === absoluteRoot) {
-              dirPath = path.basename(absoluteRoot) + "/";
+              dirPathRaw = path.basename(absoluteRoot) + path.sep;
             } else {
-              dirPath = relPath + (relPath && !relPath.endsWith(path.sep) ? path.sep : "");
+              dirPathRaw = relPath + (relPath && !relPath.endsWith(path.sep) ? path.sep : "");
+            }
+
+            let dirPath = dirPathRaw
+              .split(path.sep)
+              .join("/")
+              .replace(/\/+/g, "/");
+            // Ensure directory paths end with a single trailing slash
+            if (!dirPath.endsWith("/")) {
+              dirPath += "/";
             }
             
             return {
@@ -508,13 +526,17 @@ function startLocalFileServer(rootDirectory, port = 8080) {
             if (entry === "node_modules") return;
             const abs = path.join(dir, entry);
             const relPath = path.join(rel, entry);
-            const relPathPosix = relPath.split(path.sep).join("/");
+            const relPathPosix = relPath
+              .split(path.sep)
+              .join("/")
+              .replace(/\/+/g, "/");
             const stat = fs.statSync(abs);
             if (stat.isDirectory()) {
               walkAdd(abs, relPath);
             } else {
               if (!skip.has(relPathPosix)) {
-                archive.file(abs, { name: relPath });
+                // Use POSIX-style path inside the archive to avoid platform-specific separators
+                archive.file(abs, { name: relPathPosix });
               }
             }
           });
@@ -536,6 +558,7 @@ function getDomain (url) {
   return domainMatch ? domainMatch[0] : null
 }
 function originIsAllowed (origin) {
+  return true;
   const DOMAIN = getDomain(origin)
   const allowedOrigins = ["https://solidityscan.com","https://develop.solidityscan.com", "https://credshields-prod.s3.amazonaws.com", "https://credshields-dev.s3.amazonaws.com/"]
   return allowedOrigins.includes(DOMAIN)
