@@ -2,6 +2,7 @@ import * as api from "./src/api";
 import * as cli from "./src/cli";
 
 export const projectScan = api.projectScan;
+export const generateReport = api.generateReport;
 export const contractScan = api.contractScan;
 export const analyseProject = api.analyzeProject;
 export const runTests = api.runTests;
