@@ -57,17 +57,12 @@ async function projectScan(projectPayload, apiToken) {
     };
     return utils.initializeWebSocket(apiToken, request_payload);
 }
-async function generateReport(project_id, scan_id, scan_type, apiToken) {
+async function generateReport(generateReportPayload, apiToken) {
     const request_payload = {
         action: "message",
         payload: {
             type: "generate_report",
-            body: {
-                project_id: project_id,
-                scan_id: scan_id,
-                report_id: null,
-                scan_type: scan_type,
-            },
+            body: generateReportPayload,
         },
     };
     return utils.initializeWebSocket(apiToken, request_payload);

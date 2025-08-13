@@ -11,8 +11,13 @@ export interface ContractScanPayload {
     contract_platform: string;
     contract_chain: string;
 }
+export interface GenerateReportPayload {
+    project_id: string;
+    scan_id: string;
+    scan_type: string;
+}
 declare function projectScan(projectPayload: ProjectScanPayload, apiToken?: string): Promise<any>;
-declare function generateReport(project_id: string, scan_id: string, scan_type: string, apiToken?: string): Promise<any>;
+declare function generateReport(generateReportPayload: GenerateReportPayload, apiToken?: string): Promise<any>;
 declare function contractScan(contractPayload: ContractScanPayload, apiToken?: string): Promise<any>;
 declare function analyzeProject(projectDirectory: string, apiToken: string | undefined, projectName: string, isRunningTest?: boolean): Promise<any>;
 type RunTestsReturn = {
