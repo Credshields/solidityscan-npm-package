@@ -1,8 +1,8 @@
-const { default: axios } = require("axios");
-const { projectScan, contractScan, analyzeProject } = require("./api");
-const utils = require("./utils");
+import { default as axios } from "axios";
+import { projectScan, contractScan, analyzeProject, ProjectScanPayload, ContractScanPayload } from "./api";
+import * as utils from "./utils";
 
-function scan() {
+function scan(): void {
   const [, , ...args] = process.argv;
 
   if (args[0] === "scan") {
@@ -12,7 +12,7 @@ function scan() {
       const projectUrl = args[3];
       const projectBranch = args[4];
       const projecName = args[5];
-      const recurScan = args[7];
+      const recurScan = args[7] ? args[7] === 'true' : false;
       const apiKey = process.env.SOLIDITYSCAN_API_KEY || args[6];
 
       if (!provider || !projectUrl || !projectBranch || !projecName) {
@@ -20,7 +20,7 @@ function scan() {
         process.exit(1);
       }
 
-      const payload = {
+      const payload: ProjectScanPayload = {
         provider: provider,
         project_url: projectUrl,
         project_name: projecName,
@@ -37,9 +37,9 @@ function scan() {
           console.error("Error during scan:", error);
         });
     } else if (scanType === "contract") {
-      const contractAddress = args[2];
-      const contractChain = args[3];
-      const contractPlatform = args[4];
+      const contractAddress: string | undefined = args[2];
+      const contractChain: string | undefined = args[3];
+      const contractPlatform: string | undefined = args[4];
       const cliProvidedToken = args[5]; // CLI provided token
 
       if (!contractAddress || !contractChain || !contractPlatform) {
@@ -55,7 +55,7 @@ function scan() {
           process.exit(1);
         }
 
-        const payload = {
+        const payload: ContractScanPayload = {
           contract_address: contractAddress,
           contract_platform: contractPlatform,
           contract_chain: contractChain, 
@@ -68,16 +68,16 @@ function scan() {
           .catch((error) => {
             console.error("\nError during scan:", error);
           });
-      } catch (error) {
-        console.error("\nError with API token:", error);
+      } catch (error: any) {
+        console.error("\nError with API token:", error?.message || error);
         process.exit(1);
       }
     }
   } else if (args[0] === "local") {
-    const projectPath = args[1];
+    const projectPath: string | undefined = args[1];
     const apiKeyFromArgs = args[2] && !process.env.SOLIDITYSCAN_API_KEY;
-    const apiKey = process.env.SOLIDITYSCAN_API_KEY || args[2];
-    const projectName = apiKeyFromArgs ? args[3] : args[2];
+    const apiKey: string | undefined = process.env.SOLIDITYSCAN_API_KEY || args[2];
+    let projectName: string | undefined = apiKeyFromArgs ? args[3] : args[2];
 
     if(!projectName){
       projectName = "LocalScan";
@@ -90,8 +90,9 @@ function scan() {
 
     analyzeProject(projectPath, apiKey, projectName)
       .then((results) => {
-        if(results?.scan_details?.link){
-        axios.get(results.scan_details.link)
+        const r: any = results as any;
+        if(r?.scan_details?.link){
+        axios.get(r.scan_details.link)
           .then((response) => {
             utils.displayScanResults(response.data.scan_report);
           })
@@ -137,10 +138,9 @@ function scan() {
       try {
         wss = utils.startLocalFileServer(serveDirectory, port);
         break; // success
-      } catch (err) {
-        
-        if (userSpecifiedPort || err.code !== "EADDRINUSE") {
-          console.error(err.message || "Failed to start local server");
+      } catch (err: any) {
+        if (userSpecifiedPort || err?.code !== "EADDRINUSE") {
+          console.error(err?.message || "Failed to start local server");
           process.exit(1);
         }
         port += 1;
@@ -188,6 +188,6 @@ if (require.main === module) {
   scan();
 }
 
-module.exports = {
+export {
   scan,
 };

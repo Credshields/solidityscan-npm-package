@@ -1,15 +1,15 @@
-const request = require("request");
-const WebSocket = require("ws");
-const fs = require("fs");
-const path = require("path");
-const archiver = require("archiver");
-const axios = require("axios");
-const Table = require("cli-table3");
+import request from "request";
+import WebSocket from "ws";
+import fs from "fs";
+import path from "path";
+import archiver from "archiver";
+import axios, { type AxiosInstance } from "axios";
+import Table from "cli-table3";
 
-const cliSpinners = require("cli-spinners");
+import cliSpinners from "cli-spinners";
 const spinner = cliSpinners.dots;
 
-const getApi = (apiToken) => {
+const getApi = (apiToken?: string): AxiosInstance => {
   const apiBaseUrl = "https://api.solidityscan.com/";
   if (apiToken) {
     const instance = axios.create({
@@ -35,13 +35,13 @@ const getApi = (apiToken) => {
   }
 };
 
-const initializeWebSocket = (apiToken, payload, spinner) => {
+const initializeWebSocket = (apiToken: string | undefined, payload: any): Promise<any> => {
   const wsUrl = 'wss://api-ws.solidityscan.com/';
     const ws = new WebSocket(wsUrl, {
     rejectUnauthorized: false 
   });
   
-  const emitMessage = (messagePayload) => {
+  const emitMessage = (messagePayload: any) => {
     ws.send(
       JSON.stringify({
         action: "message",
@@ -51,7 +51,7 @@ const initializeWebSocket = (apiToken, payload, spinner) => {
   };
 
   return new Promise((resolve, reject) => {
-    const connectionTimeout = setTimeout(() => {
+    const connectionTimeout: NodeJS.Timeout = setTimeout(() => {
       ws.close();
       reject(new Error("WebSocket connection timed out waiting for scan results"));
     }, 60000); // 60 second timeout
@@ -69,9 +69,9 @@ const initializeWebSocket = (apiToken, payload, spinner) => {
       }
     });
 
-    ws.on("message", (data) => {
+    ws.on("message", (data: any) => {
       try {
-        const receivedMessage = JSON.parse(data);
+        const receivedMessage = JSON.parse(data.toString());
         clearTimeout(connectionTimeout);        
         if (receivedMessage.type === "auth_token_register") {
          
@@ -84,14 +84,12 @@ const initializeWebSocket = (apiToken, payload, spinner) => {
         else if (receivedMessage.type === "scan_status") {
           if (receivedMessage.payload?.scan_status === "scan_done") {
             resolve(receivedMessage.payload);
-            if (spinner) stopSpinner(spinner, "Scan in progress");
             ws.close();
           }
         }
         else if (receivedMessage.type === "quick_scan_status") {
           if (receivedMessage.payload?.scan_status === "scan_done") {
             resolve(receivedMessage.payload);
-            if (spinner) stopSpinner(spinner, "Scan in progress");
             ws.close();
           } else {
             console.log(`\n[WebSocket] Waiting for scan to complete. Current status: ${receivedMessage.payload?.scan_status || receivedMessage.payload?.quick_scan_status || 'processing'}`);
@@ -101,7 +99,7 @@ const initializeWebSocket = (apiToken, payload, spinner) => {
           if (receivedMessage.payload?.scan_details?.link) {
             request.get(
               receivedMessage.payload.scan_details.link,
-              (error, response, body) => {
+              (error: any, response: any, body: any) => {
                 if (error) {
                   resolve(error);
                 } else if (response.statusCode !== 200) {
@@ -114,7 +112,7 @@ const initializeWebSocket = (apiToken, payload, spinner) => {
                     resolve(body); 
                   }
                 }
-                if (spinner) stopSpinner(spinner, "Scan in progress");
+                
                 ws.close();
               }
             );
@@ -136,7 +134,7 @@ const initializeWebSocket = (apiToken, payload, spinner) => {
       }
     });
 
-    ws.on("error", (error) => {
+    ws.on("error", (error: unknown) => {
       console.log(error);
       reject(error);
     });
@@ -145,7 +143,7 @@ const initializeWebSocket = (apiToken, payload, spinner) => {
   });
 };
 
-const createProjectZip = async (projectDirectory) => {
+const createProjectZip = async (projectDirectory: string): Promise<string> => {
   try {
     const zipFileName = "project.zip";
     const output = fs.createWriteStream(zipFileName);
@@ -153,7 +151,7 @@ const createProjectZip = async (projectDirectory) => {
 
     archive.pipe(output);
 
-    const gatherSolFiles = (directory) => {
+    const gatherSolFiles = (directory: string) => {
       const files = fs.readdirSync(directory);
 
       files.forEach((file) => {
@@ -174,12 +172,12 @@ const createProjectZip = async (projectDirectory) => {
     await archive.finalize();
 
     return zipFileName;
-  } catch (error) {
+  } catch (error: any) {
     throw new Error(`Error creating project ZIP: ${error.message}`);
   }
 };
 
-const getUploadPresignedUrl = async (fileName, apiToken) => {
+const getUploadPresignedUrl = async (fileName: string, apiToken?: string) => {
   try {
     const apiUrl = `private/api-get-presigned-url/?file_name=${fileName}`;
     const API = getApi(apiToken);
@@ -189,12 +187,12 @@ const getUploadPresignedUrl = async (fileName, apiToken) => {
     } else {
       return null;
     }
-  } catch (error) {
+  } catch (error: any) {
     throw new Error(`Failed to get presigned URL: ${error.message}`);
   }
 };
 
-const uploadToS3 = async (fileData, uploadUrl) => {
+const uploadToS3 = async (fileData: Buffer | Uint8Array, uploadUrl: string): Promise<boolean> => {
   try {
     const response = await axios.put(uploadUrl, fileData, {
       headers: {
@@ -212,13 +210,13 @@ const uploadToS3 = async (fileData, uploadUrl) => {
   }
 };
 
-function capitalizeFirstLetter(str) {
+function capitalizeFirstLetter(str: string) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function formatHtmlForTerminal(htmlContent) {
+function formatHtmlForTerminal(htmlContent: string) {
   if (!htmlContent) return '';
-  let text = htmlContent.replace(/<br\s*\/?>/gi, '\n');
+  let text = htmlContent.replace(/<br\s*\/>/gi, '\n');
   text = text.replace(/<code>(.*?)<\/code>/gi, '`$1`');
   text = text.replace(/<\/?[^>]+(>|$)/g, '');
   text = text.replace(/\s+/g, ' ').trim();
@@ -226,7 +224,7 @@ function formatHtmlForTerminal(htmlContent) {
   return text;
 }
 
-const displayScanResults = (scan) => {
+const displayScanResults = (scan: any): void => {
   const table = new Table({
     head: ["#", "NAME", "SEVERITY", "CONFIDENCE", "DESCRIPTION", "REMEDIATION"],
     chars: {
@@ -244,10 +242,10 @@ const displayScanResults = (scan) => {
   });  
 
   let issueCount = 0;
-  scan.multi_file_scan_details.forEach((detail) => {
+  scan.multi_file_scan_details.forEach((detail: any) => {
     const { template_details } = detail;
     if (detail.metric_wise_aggregated_findings) {
-      detail.metric_wise_aggregated_findings.forEach((bug) => {
+      detail.metric_wise_aggregated_findings.forEach((bug: any) => {
         issueCount++;
         const filePath = bug.findings[0].file_path;
         const location = `${filePath.replace("/project", "")}\nL${bug.findings[0].line_nos_start} - L${bug.findings[0].line_nos_end}`;
@@ -276,7 +274,7 @@ const displayScanResults = (scan) => {
   }
 };
 
-const displayScanSummary = (scan) => {
+const displayScanSummary = (scan: any): void => {
   const table = new Table();
 
   const issues_count =
@@ -311,7 +309,7 @@ const displayScanSummary = (scan) => {
 };
 
 // Function to display a spinner with dynamic status
-async function showSpinnerWithStatus(statusMessage, spinnerFrames) {
+async function showSpinnerWithStatus(statusMessage: string, spinnerFrames: string[]): Promise<ReturnType<typeof setInterval>> {
   process.stdout.write(`${statusMessage}... `);
 
   let frameIndex = 0;
@@ -322,24 +320,24 @@ async function showSpinnerWithStatus(statusMessage, spinnerFrames) {
     frameIndex = (frameIndex + 1) % spinnerFrames.length;
   }, 100);
 
-  return interval;
+  return interval as ReturnType<typeof setInterval>;
 }
 
 // Function to stop the spinner
-function stopSpinner(interval, statusMessage) {
-  clearInterval(interval);
+function stopSpinner(interval: ReturnType<typeof setInterval>, statusMessage: string) {
+  clearInterval(interval as any);
   process.stdout.write("\r");
   console.log(`${statusMessage}... Done`);
 }
 
 // New helper to serve local directory over WebSocket
-function startLocalFileServer(rootDirectory, port = 8080) {
+function startLocalFileServer(rootDirectory: string, port: number = 8080) {
   if (!fs.existsSync(rootDirectory)) {
     throw new Error(`Directory not found: ${rootDirectory}`);
   }
 
   const absoluteRoot = path.resolve(rootDirectory);
-  const wss = new WebSocket.Server({ port, verifyClient: (info, done) => {
+  const wss = new WebSocket.Server({ port, verifyClient: (info: any, done: any) => {
     if (!originIsAllowed(info.origin)) {
       done(false)
       console.log(`Connection from origin  ${info.origin} is not allowed`)
@@ -350,8 +348,8 @@ function startLocalFileServer(rootDirectory, port = 8080) {
 
   console.log(`SolidityScan local file server started\nServing directory: ${absoluteRoot}`);
 
-  wss.on("connection", (socket) => {
-    socket.on("message", async (raw) => {
+  wss.on("connection", (socket: any) => {
+    socket.on("message", async (raw: any) => {
       let message;
       try {
         message = JSON.parse(raw);
@@ -366,19 +364,19 @@ function startLocalFileServer(rootDirectory, port = 8080) {
 
       if (action === "listFiles") {
         // Return hierarchical folder tree with metadata
-        const buildTree = (dir, relPath = "") => {
+        const buildTree = (dir: string, relPath: string = ""): any => {
           const name = path.basename(dir);
           const stat = fs.statSync(dir);
           if (stat.isDirectory()) {
-            const dirs = [];
-            const files = [];
+            const dirs: any[] = [];
+            const files: any[] = [];
             fs.readdirSync(dir).forEach((entry) => {
               if (entry === "node_modules") return;
               const abs = path.join(dir, entry);
               const rootName = path.basename(absoluteRoot);
               
               // Build a raw relative path using native separators
-              let childRelRaw;
+              let childRelRaw: string;
               if (relPath === "") {
                 childRelRaw = path.join(rootName, entry);
               } else {
@@ -423,7 +421,7 @@ function startLocalFileServer(rootDirectory, port = 8080) {
             }
 
             // Build directory path (raw) and then normalise to POSIX
-            let dirPathRaw;
+            let dirPathRaw: string;
             if (dir === absoluteRoot) {
               dirPathRaw = path.basename(absoluteRoot) + path.sep;
             } else {
@@ -451,9 +449,10 @@ function startLocalFileServer(rootDirectory, port = 8080) {
             };
           }
           // Should not reach here for files as we handle in parent
+          return undefined as any;
         };
 
-        const rootTreeInternal = buildTree(absoluteRoot, "");
+        const rootTreeInternal: any = buildTree(absoluteRoot, "") as any;
         const responseTree = {
           name: "",
           path: "",
@@ -485,15 +484,15 @@ function startLocalFileServer(rootDirectory, port = 8080) {
         }
 
         const archive = archiver("zip", { zlib: { level: 9 } });
-        const chunks = [];
+        const chunks: Buffer[] = [];
 
-        archive.on("data", (chunk) => chunks.push(chunk));
-        archive.on("warning", (err) => {
+        archive.on("data", (chunk: Buffer) => chunks.push(chunk));
+        archive.on("warning", (err: any) => {
           if (err.code !== "ENOENT") {
             socket.send(JSON.stringify({ type: "error", error: err.message }));
           }
         });
-        archive.on("error", (err) => {
+        archive.on("error", (err: any) => {
           socket.send(JSON.stringify({ type: "error", error: err.message }));
         });
         archive.on("end", async () => {
@@ -521,7 +520,7 @@ function startLocalFileServer(rootDirectory, port = 8080) {
         });
 
         // recursively walk and add files not skipped
-        const walkAdd = (dir, rel = "") => {
+        const walkAdd = (dir: string, rel: string = "") => {
           fs.readdirSync(dir).forEach((entry) => {
             if (entry === "node_modules") return;
             const abs = path.join(dir, entry);
@@ -553,18 +552,19 @@ function startLocalFileServer(rootDirectory, port = 8080) {
 
   return wss;
 }
-function getDomain (url) {
+
+function getDomain (url: string) {
   const domainMatch = url.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/img)
   return domainMatch ? domainMatch[0] : null
 }
-function originIsAllowed (origin) {
+function originIsAllowed (origin: string) {
   return true;
-  const DOMAIN = getDomain(origin)
+  const DOMAIN = getDomain(origin) || "";
   const allowedOrigins = ["https://solidityscan.com","https://develop.solidityscan.com", "https://credshields-prod.s3.amazonaws.com", "https://credshields-dev.s3.amazonaws.com/"]
   return allowedOrigins.includes(DOMAIN)
 }
 
-module.exports = {
+export {
   initializeWebSocket,
   createProjectZip,
   getUploadPresignedUrl,

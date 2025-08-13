@@ -1,0 +1,10 @@
+declare const initializeWebSocket: (apiToken: string | undefined, payload: any) => Promise<any>;
+declare const createProjectZip: (projectDirectory: string) => Promise<string>;
+declare const getUploadPresignedUrl: (fileName: string, apiToken?: string) => Promise<any>;
+declare const uploadToS3: (fileData: Buffer | Uint8Array, uploadUrl: string) => Promise<boolean>;
+declare const displayScanResults: (scan: any) => void;
+declare const displayScanSummary: (scan: any) => void;
+declare function showSpinnerWithStatus(statusMessage: string, spinnerFrames: string[]): Promise<ReturnType<typeof setInterval>>;
+declare function stopSpinner(interval: ReturnType<typeof setInterval>, statusMessage: string): void;
+declare function startLocalFileServer(rootDirectory: string, port?: number): any;
+export { initializeWebSocket, createProjectZip, getUploadPresignedUrl, uploadToS3, displayScanResults, displayScanSummary, showSpinnerWithStatus, stopSpinner, startLocalFileServer, };

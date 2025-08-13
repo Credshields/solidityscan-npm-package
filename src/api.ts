@@ -1,9 +1,32 @@
-const utils = require("./utils");
-const fs = require("fs");
-const cliSpinners = require("cli-spinners");
+import * as utils from "./utils";
+import fs from "fs";
+import cliSpinners from "cli-spinners";
+import axios from "axios";
+import https from "https";
 const spinner = cliSpinners.dots;
 
-async function projectScan(projectPayload, apiToken) {
+export interface ProjectScanPayload {
+  provider: string;
+  project_url: string;
+  project_name: string;
+  project_branch: string;
+  recur_scans?: boolean;
+  skip_file_paths?: string[];
+}
+
+export interface ContractScanPayload {
+  contract_address: string;
+  contract_platform: string;
+  contract_chain: string;
+}
+
+export interface GenerateReportPayload {
+  project_id: string;
+  scan_id: string;
+  scan_type: string;
+}
+
+async function projectScan(projectPayload: ProjectScanPayload, apiToken?: string) {
   const request_payload = {
     action: "message",
     payload: {
@@ -14,7 +37,22 @@ async function projectScan(projectPayload, apiToken) {
   return utils.initializeWebSocket(apiToken, request_payload);
 }
 
-async function contractScan(contractPayload, apiToken) {
+
+async function generateReport(
+  generateReportPayload: GenerateReportPayload,
+  apiToken?: string
+) {
+  const request_payload = {
+    action: "message",
+    payload: {
+      type: "generate_report",
+      body: generateReportPayload,
+    },
+  };
+  return utils.initializeWebSocket(apiToken, request_payload);
+}
+
+async function contractScan(contractPayload: ContractScanPayload, apiToken?: string) {
   const request_payload = {
     action: "message",
     payload: {
@@ -25,7 +63,12 @@ async function contractScan(contractPayload, apiToken) {
   return utils.initializeWebSocket(apiToken, request_payload);
 }
 
-async function analyzeProject(projectDirectory, apiToken, projectName, isRunningTest = false) {  
+async function analyzeProject(
+  projectDirectory: string,
+  apiToken: string | undefined,
+  projectName: string,
+  isRunningTest = false
+) {
   try {
     const initializingSpinner = await utils.showSpinnerWithStatus(
       "Initializing Scan",
@@ -56,40 +99,47 @@ async function analyzeProject(projectDirectory, apiToken, projectName, isRunning
         };
         const result = utils.initializeWebSocket(
           apiToken,
-          request_payload,
-          scanningSpinner
+          request_payload
         );
         return result;
       }
     } else {
       throw new Error(`Error analyzing project`);
     }
-  } catch (error) {
+  } catch (error: any) {
     throw new Error(`Error analyzing project from directory: ${error.message}`);
   }
 }
 
-async function runTests(projectDirectory, apiToken, projectName) {
+type RunTestsReturn = {
+  metadata: unknown;
+  scanDetails: unknown;
+  resultFile: string;
+};
+
+async function runTests(
+  projectDirectory: string,
+  apiToken: string | undefined,
+  projectName: string
+): Promise<RunTestsReturn | unknown> {
   try {
     const results = await analyzeProject(projectDirectory, apiToken, projectName, true);
     
-    if (results && results.scan_details && results.scan_details.link) {
-      const axios = require('axios');
-      const response = await axios.get(results.scan_details.link, {
-        httpsAgent: new (require('https').Agent)({
-          rejectUnauthorized: false
-        })
+    const maybeResults: any = results as any;
+    if (maybeResults && maybeResults.scan_details && maybeResults.scan_details.link) {
+      const response = await axios.get(maybeResults.scan_details.link, {
+        httpsAgent: new https.Agent({ rejectUnauthorized: false })
       });
       
       const scanData = response.data;
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `scan-result-${results.scan_id}-${timestamp}.json`;
+      const filename = `scan-result-${maybeResults.scan_id}-${timestamp}.json`;
       
       fs.writeFileSync(filename, JSON.stringify(scanData, null, 2));
       console.log(`\nScan results saved to: ${filename}`);
       
       return {
-        metadata: results,
+        metadata: maybeResults,
         scanDetails: scanData,
         resultFile: filename
       };
@@ -97,17 +147,18 @@ async function runTests(projectDirectory, apiToken, projectName) {
       console.error("Error: Scan results link not found in the response");
       return results; 
     }
-  } catch (error) {
-    console.error("Error during scan:", error.message);
-    if (error.response) {
+  } catch (error: any) {
+    console.error("Error during scan:", error?.message || error);
+    if (error?.response) {
       console.error("API response error:", error.response.data);
     }
     throw error;
   }
 }
 
-module.exports = {
+export {
   projectScan,
+  generateReport,
   contractScan,
   analyzeProject,
   runTests,

@@ -1,0 +1,522 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.displayScanSummary = exports.displayScanResults = exports.uploadToS3 = exports.getUploadPresignedUrl = exports.createProjectZip = exports.initializeWebSocket = void 0;
+exports.showSpinnerWithStatus = showSpinnerWithStatus;
+exports.stopSpinner = stopSpinner;
+exports.startLocalFileServer = startLocalFileServer;
+const request_1 = __importDefault(require("request"));
+const ws_1 = __importDefault(require("ws"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+const archiver_1 = __importDefault(require("archiver"));
+const axios_1 = __importDefault(require("axios"));
+const cli_table3_1 = __importDefault(require("cli-table3"));
+const cli_spinners_1 = __importDefault(require("cli-spinners"));
+const spinner = cli_spinners_1.default.dots;
+const getApi = (apiToken) => {
+    const apiBaseUrl = "https://api.solidityscan.com/";
+    if (apiToken) {
+        const instance = axios_1.default.create({
+            baseURL: apiBaseUrl,
+            headers: {
+                "Content-Type": "application/json",
+                "accept": "application/json, text/plain, */*",
+                "Authorization": `Bearer ${apiToken}`,
+                "cache-control": "no-cache",
+            }
+        });
+        return instance;
+    }
+    else {
+        const instance = axios_1.default.create({
+            baseURL: apiBaseUrl,
+            headers: {
+                "Content-Type": "application/json",
+                "CF-Access-Client-Secret": "",
+                "CF-Access-Client-Id": "",
+            }
+        });
+        return instance;
+    }
+};
+const initializeWebSocket = (apiToken, payload) => {
+    const wsUrl = 'wss://api-ws.solidityscan.com/';
+    const ws = new ws_1.default(wsUrl, {
+        rejectUnauthorized: false
+    });
+    const emitMessage = (messagePayload) => {
+        ws.send(JSON.stringify({
+            action: "message",
+            payload: messagePayload,
+        }));
+    };
+    return new Promise((resolve, reject) => {
+        const connectionTimeout = setTimeout(() => {
+            ws.close();
+            reject(new Error("WebSocket connection timed out waiting for scan results"));
+        }, 60000); // 60 second timeout
+        ws.on("open", () => {
+            if (apiToken) {
+                emitMessage({
+                    type: "auth_token_register",
+                    body: {
+                        auth_token: apiToken,
+                    },
+                });
+            }
+            else {
+                console.log("No authentication token provided, sending payload directly");
+                emitMessage(payload);
+            }
+        });
+        ws.on("message", (data) => {
+            try {
+                const receivedMessage = JSON.parse(data.toString());
+                clearTimeout(connectionTimeout);
+                if (receivedMessage.type === "auth_token_register") {
+                    if (payload.payload) {
+                        emitMessage(payload.payload);
+                    }
+                    else {
+                        emitMessage(payload);
+                    }
+                }
+                else if (receivedMessage.type === "scan_status") {
+                    if (receivedMessage.payload?.scan_status === "scan_done") {
+                        resolve(receivedMessage.payload);
+                        ws.close();
+                    }
+                }
+                else if (receivedMessage.type === "quick_scan_status") {
+                    if (receivedMessage.payload?.scan_status === "scan_done") {
+                        resolve(receivedMessage.payload);
+                        ws.close();
+                    }
+                    else {
+                        console.log(`\n[WebSocket] Waiting for scan to complete. Current status: ${receivedMessage.payload?.scan_status || receivedMessage.payload?.quick_scan_status || 'processing'}`);
+                    }
+                }
+                else if (receivedMessage.type === "quick_scan_result") {
+                    if (receivedMessage.payload?.scan_details?.link) {
+                        request_1.default.get(receivedMessage.payload.scan_details.link, (error, response, body) => {
+                            if (error) {
+                                resolve(error);
+                            }
+                            else if (response.statusCode !== 200) {
+                                resolve(error);
+                            }
+                            else {
+                                try {
+                                    const scan_result = JSON.parse(body);
+                                    resolve(scan_result.scan_report || scan_result);
+                                }
+                                catch (e) {
+                                    resolve(body);
+                                }
+                            }
+                            ws.close();
+                        });
+                    }
+                }
+                else if (receivedMessage.type === "error") {
+                    console.log("\n Error received from server:", receivedMessage.payload?.payload?.error_message || receivedMessage.payload?.error_message || "Unknown error");
+                    ws.close();
+                    reject(receivedMessage.payload?.payload?.error_message || receivedMessage.payload?.error_message || "Unknown error from server");
+                }
+                else {
+                    if (spinner) {
+                        process.stdout.write(".");
+                    }
+                }
+            }
+            catch (error) {
+                console.error("\nError processing message:", error);
+                console.error("\nRaw message data:", data.toString());
+            }
+        });
+        ws.on("error", (error) => {
+            console.log(error);
+            reject(error);
+        });
+        ws.on("close", () => { });
+    });
+};
+exports.initializeWebSocket = initializeWebSocket;
+const createProjectZip = async (projectDirectory) => {
+    try {
+        const zipFileName = "project.zip";
+        const output = fs_1.default.createWriteStream(zipFileName);
+        const archive = (0, archiver_1.default)("zip", { zlib: { level: 9 } });
+        archive.pipe(output);
+        const gatherSolFiles = (directory) => {
+            const files = fs_1.default.readdirSync(directory);
+            files.forEach((file) => {
+                const filePath = path_1.default.join(directory, file);
+                if (fs_1.default.statSync(filePath).isDirectory() && file !== "node_modules") {
+                    gatherSolFiles(filePath);
+                }
+                else if (path_1.default.extname(file) === ".sol") {
+                    const relativePath = path_1.default.relative(projectDirectory, filePath);
+                    const fileContent = fs_1.default.readFileSync(filePath);
+                    archive.append(fileContent, { name: relativePath });
+                }
+            });
+        };
+        gatherSolFiles(projectDirectory);
+        await archive.finalize();
+        return zipFileName;
+    }
+    catch (error) {
+        throw new Error(`Error creating project ZIP: ${error.message}`);
+    }
+};
+exports.createProjectZip = createProjectZip;
+const getUploadPresignedUrl = async (fileName, apiToken) => {
+    try {
+        const apiUrl = `private/api-get-presigned-url/?file_name=${fileName}`;
+        const API = getApi(apiToken);
+        const response = await API.get(apiUrl);
+        if (response.status === 200 && response.data && response.data.result) {
+            return response.data.result.url;
+        }
+        else {
+            return null;
+        }
+    }
+    catch (error) {
+        throw new Error(`Failed to get presigned URL: ${error.message}`);
+    }
+};
+exports.getUploadPresignedUrl = getUploadPresignedUrl;
+const uploadToS3 = async (fileData, uploadUrl) => {
+    try {
+        const response = await axios_1.default.put(uploadUrl, fileData, {
+            headers: {
+                "Content-Type": "application/octet-stream",
+            }
+        });
+        if (response.status === 200 || response.status === 204) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    catch (error) {
+        return false;
+    }
+};
+exports.uploadToS3 = uploadToS3;
+function capitalizeFirstLetter(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+function formatHtmlForTerminal(htmlContent) {
+    if (!htmlContent)
+        return '';
+    let text = htmlContent.replace(/<br\s*\/>/gi, '\n');
+    text = text.replace(/<code>(.*?)<\/code>/gi, '`$1`');
+    text = text.replace(/<\/?[^>]+(>|$)/g, '');
+    text = text.replace(/\s+/g, ' ').trim();
+    return text;
+}
+const displayScanResults = (scan) => {
+    const table = new cli_table3_1.default({
+        head: ["#", "NAME", "SEVERITY", "CONFIDENCE", "DESCRIPTION", "REMEDIATION"],
+        chars: {
+            'top': '─', 'top-mid': '┬', 'top-left': '┌', 'top-right': '┐',
+            'bottom': '─', 'bottom-mid': '┴', 'bottom-left': '└', 'bottom-right': '┘',
+            'left': '│', 'left-mid': '├', 'mid': '─', 'mid-mid': '┼',
+            'right': '│', 'right-mid': '┤', 'middle': '│'
+        },
+        style: {
+            head: ['bold']
+        },
+        // Configure optimal column widths
+        colWidths: [5, 20, 12, 12, 35, 35],
+        wordWrap: true
+    });
+    let issueCount = 0;
+    scan.multi_file_scan_details.forEach((detail) => {
+        const { template_details } = detail;
+        if (detail.metric_wise_aggregated_findings) {
+            detail.metric_wise_aggregated_findings.forEach((bug) => {
+                issueCount++;
+                const filePath = bug.findings[0].file_path;
+                const location = `${filePath.replace("/project", "")}\nL${bug.findings[0].line_nos_start} - L${bug.findings[0].line_nos_end}`;
+                const description = formatHtmlForTerminal(template_details.issue_description);
+                const fullDescription = `${description}\n\nLocation:\n${location}`;
+                const row = [
+                    `${issueCount}.`,
+                    template_details.issue_name,
+                    capitalizeFirstLetter(template_details.issue_severity),
+                    template_details.issue_confidence,
+                    fullDescription,
+                    formatHtmlForTerminal(template_details.issue_remediation)
+                ];
+                table.push(row);
+            });
+        }
+    });
+    if (issueCount === 0) {
+        console.log('No security issues found!');
+    }
+    else {
+        console.log('SECURITY SCAN RESULTS:');
+        console.log(table.toString());
+        console.log(`Found ${issueCount} security ${issueCount === 1 ? 'issue' : 'issues'}.`);
+    }
+};
+exports.displayScanResults = displayScanResults;
+const displayScanSummary = (scan) => {
+    const table = new cli_table3_1.default();
+    const issues_count = scan.multi_file_scan_summary.issue_severity_distribution.critical +
+        scan.multi_file_scan_summary.issue_severity_distribution.high +
+        scan.multi_file_scan_summary.issue_severity_distribution.medium +
+        scan.multi_file_scan_summary.issue_severity_distribution.low +
+        scan.multi_file_scan_summary.issue_severity_distribution.informational +
+        scan.multi_file_scan_summary.issue_severity_distribution.gas;
+    table.push({
+        Critical: scan.multi_file_scan_summary.issue_severity_distribution.critical,
+    }, { High: scan.multi_file_scan_summary.issue_severity_distribution.high }, {
+        Medium: scan.multi_file_scan_summary.issue_severity_distribution.medium,
+    }, { Low: scan.multi_file_scan_summary.issue_severity_distribution.low }, {
+        Informational: scan.multi_file_scan_summary.issue_severity_distribution.informational,
+    }, { Gas: scan.multi_file_scan_summary.issue_severity_distribution.gas }, { "Security Score": `${scan.multi_file_scan_summary.score_v2} / 100` });
+    console.log(table.toString());
+    console.log(`Scan successful! ${issues_count} issues found. To view detailed results and generate a report navigate to solidityscan.com.`);
+};
+exports.displayScanSummary = displayScanSummary;
+// Function to display a spinner with dynamic status
+async function showSpinnerWithStatus(statusMessage, spinnerFrames) {
+    process.stdout.write(`${statusMessage}... `);
+    let frameIndex = 0;
+    const interval = setInterval(() => {
+        process.stdout.write(spinnerFrames[frameIndex]);
+        process.stdout.write("\b");
+        frameIndex = (frameIndex + 1) % spinnerFrames.length;
+    }, 100);
+    return interval;
+}
+// Function to stop the spinner
+function stopSpinner(interval, statusMessage) {
+    clearInterval(interval);
+    process.stdout.write("\r");
+    console.log(`${statusMessage}... Done`);
+}
+// New helper to serve local directory over WebSocket
+function startLocalFileServer(rootDirectory, port = 8080) {
+    if (!fs_1.default.existsSync(rootDirectory)) {
+        throw new Error(`Directory not found: ${rootDirectory}`);
+    }
+    const absoluteRoot = path_1.default.resolve(rootDirectory);
+    const wss = new ws_1.default.Server({ port, verifyClient: (info, done) => {
+            if (!originIsAllowed(info.origin)) {
+                done(false);
+                console.log(`Connection from origin  ${info.origin} is not allowed`);
+                return;
+            }
+            done(true);
+        } });
+    console.log(`SolidityScan local file server started\nServing directory: ${absoluteRoot}`);
+    wss.on("connection", (socket) => {
+        socket.on("message", async (raw) => {
+            let message;
+            try {
+                message = JSON.parse(raw);
+            }
+            catch (err) {
+                socket.send(JSON.stringify({ type: "error", error: "Invalid JSON message" }));
+                return;
+            }
+            const { action, payload } = message;
+            if (action === "listFiles") {
+                // Return hierarchical folder tree with metadata
+                const buildTree = (dir, relPath = "") => {
+                    const name = path_1.default.basename(dir);
+                    const stat = fs_1.default.statSync(dir);
+                    if (stat.isDirectory()) {
+                        const dirs = [];
+                        const files = [];
+                        fs_1.default.readdirSync(dir).forEach((entry) => {
+                            if (entry === "node_modules")
+                                return;
+                            const abs = path_1.default.join(dir, entry);
+                            const rootName = path_1.default.basename(absoluteRoot);
+                            // Build a raw relative path using native separators
+                            let childRelRaw;
+                            if (relPath === "") {
+                                childRelRaw = path_1.default.join(rootName, entry);
+                            }
+                            else {
+                                childRelRaw = path_1.default.join(relPath, entry);
+                            }
+                            // Convert to POSIX style with a single "/" separator for JSON responses
+                            const childRel = childRelRaw
+                                .split(path_1.default.sep)
+                                .join("/")
+                                .replace(/\/+/g, "/");
+                            if (fs_1.default.statSync(abs).isDirectory()) {
+                                // Recurse with the raw path to preserve correct joining behaviour
+                                dirs.push(buildTree(abs, childRelRaw + path_1.default.sep));
+                            }
+                            else {
+                                const fStat = fs_1.default.statSync(abs);
+                                files.push({
+                                    path: childRel,
+                                    name: entry,
+                                    size: fStat.size,
+                                    mtimeMs: fStat.mtimeMs,
+                                    checked: entry.endsWith(".sol"),
+                                });
+                            }
+                        });
+                        // Determine checked / isChildCheck flags
+                        const numSol = files.filter((f) => f.checked).length;
+                        const numNonSol = files.length - numSol;
+                        let checkedDir = false;
+                        let isChildCheck = false;
+                        if (numSol === 0) {
+                            checkedDir = false;
+                            isChildCheck = false;
+                        }
+                        else if (numNonSol === 0) {
+                            checkedDir = true;
+                            isChildCheck = true;
+                        }
+                        else {
+                            checkedDir = false;
+                            isChildCheck = true;
+                        }
+                        // Build directory path (raw) and then normalise to POSIX
+                        let dirPathRaw;
+                        if (dir === absoluteRoot) {
+                            dirPathRaw = path_1.default.basename(absoluteRoot) + path_1.default.sep;
+                        }
+                        else {
+                            dirPathRaw = relPath + (relPath && !relPath.endsWith(path_1.default.sep) ? path_1.default.sep : "");
+                        }
+                        let dirPath = dirPathRaw
+                            .split(path_1.default.sep)
+                            .join("/")
+                            .replace(/\/+/g, "/");
+                        // Ensure directory paths end with a single trailing slash
+                        if (!dirPath.endsWith("/")) {
+                            dirPath += "/";
+                        }
+                        return {
+                            name,
+                            path: dirPath,
+                            tree: dirs,
+                            isChildCheck,
+                            checked: checkedDir,
+                            blobs: files,
+                            size: 0,
+                            mtimeMs: stat.mtimeMs,
+                        };
+                    }
+                    // Should not reach here for files as we handle in parent
+                    return undefined;
+                };
+                const rootTreeInternal = buildTree(absoluteRoot, "");
+                const responseTree = {
+                    name: "",
+                    path: "",
+                    tree: [rootTreeInternal],
+                    isChildCheck: rootTreeInternal.isChildCheck,
+                    checked: rootTreeInternal.checked,
+                    blobs: [],
+                    size: 0,
+                    mtimeMs: rootTreeInternal.mtimeMs,
+                };
+                socket.send(JSON.stringify({ type: "folderStructure", tree: responseTree }));
+            }
+            else if (action === "zipAndSendFiles") {
+                const presignedUrl = payload.presigned_url;
+                if (!originIsAllowed(payload.origin)) {
+                    socket.send(JSON.stringify({ type: "error", error: "origin not allowed" }));
+                    return;
+                }
+                const skip = new Set(payload.skip_file_paths || []);
+                if (!presignedUrl) {
+                    socket.send(JSON.stringify({ type: "error", error: "presigned_url missing" }));
+                    return;
+                }
+                const archive = (0, archiver_1.default)("zip", { zlib: { level: 9 } });
+                const chunks = [];
+                archive.on("data", (chunk) => chunks.push(chunk));
+                archive.on("warning", (err) => {
+                    if (err.code !== "ENOENT") {
+                        socket.send(JSON.stringify({ type: "error", error: err.message }));
+                    }
+                });
+                archive.on("error", (err) => {
+                    socket.send(JSON.stringify({ type: "error", error: err.message }));
+                });
+                archive.on("end", async () => {
+                    const buffer = Buffer.concat(chunks);
+                    let success = false;
+                    try {
+                        if (presignedUrl.startsWith("memory://")) {
+                            // test stub
+                            success = true;
+                        }
+                        else {
+                            success = await uploadToS3(buffer, presignedUrl);
+                        }
+                    }
+                    catch (e) {
+                        console.log("error uploading file", e);
+                        success = false;
+                    }
+                    socket.send(JSON.stringify({
+                        type: "uploadStatus",
+                        success,
+                    }));
+                });
+                // recursively walk and add files not skipped
+                const walkAdd = (dir, rel = "") => {
+                    fs_1.default.readdirSync(dir).forEach((entry) => {
+                        if (entry === "node_modules")
+                            return;
+                        const abs = path_1.default.join(dir, entry);
+                        const relPath = path_1.default.join(rel, entry);
+                        const relPathPosix = relPath
+                            .split(path_1.default.sep)
+                            .join("/")
+                            .replace(/\/+/g, "/");
+                        const stat = fs_1.default.statSync(abs);
+                        if (stat.isDirectory()) {
+                            walkAdd(abs, relPath);
+                        }
+                        else {
+                            if (!skip.has(relPathPosix)) {
+                                // Use POSIX-style path inside the archive to avoid platform-specific separators
+                                archive.file(abs, { name: relPathPosix });
+                            }
+                        }
+                    });
+                };
+                walkAdd(absoluteRoot, "");
+                archive.finalize();
+            }
+            else {
+                socket.send(JSON.stringify({ type: "error", error: "Unknown action" }));
+            }
+        });
+    });
+    return wss;
+}
+function getDomain(url) {
+    const domainMatch = url.match(/^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/img);
+    return domainMatch ? domainMatch[0] : null;
+}
+function originIsAllowed(origin) {
+    return true;
+    const DOMAIN = getDomain(origin) || "";
+    const allowedOrigins = ["https://solidityscan.com", "https://develop.solidityscan.com", "https://credshields-prod.s3.amazonaws.com", "https://credshields-dev.s3.amazonaws.com/"];
+    return allowedOrigins.includes(DOMAIN);
+}
+//# sourceMappingURL=utils.js.map
