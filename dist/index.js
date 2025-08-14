@@ -33,11 +33,13 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.scan = exports.runTests = exports.analyseProject = exports.contractScan = exports.generateReport = exports.projectScan = void 0;
+exports.scan = exports.runTests = exports.analyseProject = exports.contractScan = exports.quickScanContract = exports.quickScanProject = exports.generateReport = exports.projectScan = void 0;
 const api = __importStar(require("./src/api"));
 const cli = __importStar(require("./src/cli"));
 exports.projectScan = api.projectScan;
 exports.generateReport = api.generateReport;
+exports.quickScanProject = api.quickScanProject;
+exports.quickScanContract = api.quickScanContract;
 exports.contractScan = api.contractScan;
 exports.analyseProject = api.analyzeProject;
 exports.runTests = api.runTests;

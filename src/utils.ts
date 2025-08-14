@@ -35,7 +35,7 @@ const getApi = (apiToken?: string): AxiosInstance => {
   }
 };
 
-const initializeWebSocket = (apiToken: string | undefined, payload: any): Promise<any> => {
+const initializeWebSocket = (apiToken: string | undefined, payload: any, spinner: boolean = true, ): Promise<any> => {
   const wsUrl = 'wss://api-ws.solidityscan.com/';
     const ws = new WebSocket(wsUrl, {
     rejectUnauthorized: false 
@@ -93,6 +93,14 @@ const initializeWebSocket = (apiToken: string | undefined, payload: any): Promis
             ws.close();
           } else {
             console.log(`\n[WebSocket] Waiting for scan to complete. Current status: ${receivedMessage.payload?.scan_status || receivedMessage.payload?.quick_scan_status || 'processing'}`);
+          }
+        }
+        else if (receivedMessage.type === "report_generation_status") {
+          if (receivedMessage.payload?.report_status === "report_generated") {
+            resolve(receivedMessage.payload);
+            ws.close();
+          } else {
+            console.log(`\n[WebSocket] Report generation payload: ${receivedMessage.payload}`);
           }
         }
         else if (receivedMessage.type === "quick_scan_result") {          

@@ -16,9 +16,11 @@ export interface GenerateReportPayload {
     scan_id: string;
     scan_type: string;
 }
-declare function projectScan(projectPayload: ProjectScanPayload, apiToken?: string): Promise<any>;
-declare function generateReport(generateReportPayload: GenerateReportPayload, apiToken?: string): Promise<any>;
-declare function contractScan(contractPayload: ContractScanPayload, apiToken?: string): Promise<any>;
+declare function projectScan(projectPayload: ProjectScanPayload, apiToken?: string, spinner?: boolean): Promise<any>;
+declare function quickScanProject(projectPayload: ProjectScanPayload, apiToken?: string, spinner?: boolean): Promise<any>;
+declare function quickScanContract(contractPayload: ContractScanPayload, apiToken?: string, spinner?: boolean): Promise<any>;
+declare function generateReport(generateReportPayload: GenerateReportPayload, apiToken?: string, spinner?: boolean): Promise<any>;
+declare function contractScan(contractPayload: ContractScanPayload, apiToken?: string, spinner?: boolean): Promise<any>;
 declare function analyzeProject(projectDirectory: string, apiToken: string | undefined, projectName: string, isRunningTest?: boolean): Promise<any>;
 type RunTestsReturn = {
     metadata: unknown;
@@ -26,4 +28,4 @@ type RunTestsReturn = {
     resultFile: string;
 };
 declare function runTests(projectDirectory: string, apiToken: string | undefined, projectName: string): Promise<RunTestsReturn | unknown>;
-export { projectScan, generateReport, contractScan, analyzeProject, runTests, };
+export { projectScan, generateReport, contractScan, analyzeProject, runTests, quickScanProject, quickScanContract, };

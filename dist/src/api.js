@@ -41,13 +41,15 @@ exports.generateReport = generateReport;
 exports.contractScan = contractScan;
 exports.analyzeProject = analyzeProject;
 exports.runTests = runTests;
+exports.quickScanProject = quickScanProject;
+exports.quickScanContract = quickScanContract;
 const utils = __importStar(require("./utils"));
 const fs_1 = __importDefault(require("fs"));
 const cli_spinners_1 = __importDefault(require("cli-spinners"));
 const axios_1 = __importDefault(require("axios"));
 const https_1 = __importDefault(require("https"));
 const spinner = cli_spinners_1.default.dots;
-async function projectScan(projectPayload, apiToken) {
+async function projectScan(projectPayload, apiToken, spinner = true) {
     const request_payload = {
         action: "message",
         payload: {
@@ -55,9 +57,29 @@ async function projectScan(projectPayload, apiToken) {
             body: projectPayload,
         },
     };
-    return utils.initializeWebSocket(apiToken, request_payload);
+    return utils.initializeWebSocket(apiToken, request_payload, spinner);
 }
-async function generateReport(generateReportPayload, apiToken) {
+async function quickScanProject(projectPayload, apiToken, spinner = true) {
+    const request_payload = {
+        action: "message",
+        payload: {
+            type: "private_quick_scan_initiate",
+            body: projectPayload,
+        },
+    };
+    return utils.initializeWebSocket(apiToken, request_payload, spinner);
+}
+async function quickScanContract(contractPayload, apiToken, spinner = true) {
+    const request_payload = {
+        action: "message",
+        payload: {
+            type: "private_quick_scan_initiate",
+            body: contractPayload,
+        },
+    };
+    return utils.initializeWebSocket(apiToken, request_payload, spinner);
+}
+async function generateReport(generateReportPayload, apiToken, spinner = true) {
     const request_payload = {
         action: "message",
         payload: {
@@ -65,9 +87,9 @@ async function generateReport(generateReportPayload, apiToken) {
             body: generateReportPayload,
         },
     };
-    return utils.initializeWebSocket(apiToken, request_payload);
+    return utils.initializeWebSocket(apiToken, request_payload, spinner);
 }
-async function contractScan(contractPayload, apiToken) {
+async function contractScan(contractPayload, apiToken, spinner = true) {
     const request_payload = {
         action: "message",
         payload: {
@@ -75,7 +97,7 @@ async function contractScan(contractPayload, apiToken) {
             body: contractPayload,
         },
     };
-    return utils.initializeWebSocket(apiToken, request_payload);
+    return utils.initializeWebSocket(apiToken, request_payload, spinner);
 }
 async function analyzeProject(projectDirectory, apiToken, projectName, isRunningTest = false) {
     try {

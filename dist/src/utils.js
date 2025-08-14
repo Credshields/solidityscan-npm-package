@@ -42,7 +42,7 @@ const getApi = (apiToken) => {
         return instance;
     }
 };
-const initializeWebSocket = (apiToken, payload) => {
+const initializeWebSocket = (apiToken, payload, spinner = true) => {
     const wsUrl = 'wss://api-ws.solidityscan.com/';
     const ws = new ws_1.default(wsUrl, {
         rejectUnauthorized: false
@@ -97,6 +97,15 @@ const initializeWebSocket = (apiToken, payload) => {
                     }
                     else {
                         console.log(`\n[WebSocket] Waiting for scan to complete. Current status: ${receivedMessage.payload?.scan_status || receivedMessage.payload?.quick_scan_status || 'processing'}`);
+                    }
+                }
+                else if (receivedMessage.type === "report_generation_status") {
+                    if (receivedMessage.payload?.report_status === "report_generated") {
+                        resolve(receivedMessage.payload);
+                        ws.close();
+                    }
+                    else {
+                        console.log(`\n[WebSocket] Report generation payload: ${receivedMessage.payload}`);
                     }
                 }
                 else if (receivedMessage.type === "quick_scan_result") {

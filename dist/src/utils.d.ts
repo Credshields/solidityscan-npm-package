@@ -1,4 +1,4 @@
-declare const initializeWebSocket: (apiToken: string | undefined, payload: any) => Promise<any>;
+declare const initializeWebSocket: (apiToken: string | undefined, payload: any, spinner?: boolean) => Promise<any>;
 declare const createProjectZip: (projectDirectory: string) => Promise<string>;
 declare const getUploadPresignedUrl: (fileName: string, apiToken?: string) => Promise<any>;
 declare const uploadToS3: (fileData: Buffer | Uint8Array, uploadUrl: string) => Promise<boolean>;
