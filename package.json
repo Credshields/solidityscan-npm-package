@@ -26,7 +26,7 @@
     "archiver": "^6.0.1",
     "axios": "^1.6.7",
     "cli-spinners": "^2.9.2",
-    "cli-table3": "^0.6.3",
+    "cli-table3": "^0.6.5",
     "dotenv": "^16.5.0",
     "fs": "^0.0.1-security",
     "localtunnel": "^2.0.2",
