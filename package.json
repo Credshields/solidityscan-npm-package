@@ -1,6 +1,6 @@
 {
   "name": "solidityscan",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "SolidityScan is a tool for scanning Solidity smart contracts for vulnerabilities.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -24,7 +24,7 @@
   "license": "ISC",
   "dependencies": {
     "archiver": "^6.0.1",
-    "axios": "^1.6.7",
+    "axios": "0.27.2",
     "cli-spinners": "^2.9.2",
     "cli-table3": "^0.6.3",
     "dotenv": "^16.5.0",
