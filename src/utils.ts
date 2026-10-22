@@ -37,9 +37,7 @@ const getApi = (apiToken?: string): AxiosInstance => {
 
 const initializeWebSocket = (apiToken: string | undefined, payload: any, spinner: boolean = true, ): Promise<any> => {
   const wsUrl = 'wss://api-ws.solidityscan.com/';
-    const ws = new WebSocket(wsUrl, {
-    rejectUnauthorized: false 
-  });
+    const ws = new WebSocket(wsUrl);
   
   const emitMessage = (messagePayload: any) => {
     ws.send(

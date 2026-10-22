@@ -2,7 +2,6 @@ import * as utils from "./utils";
 import fs from "fs";
 import cliSpinners from "cli-spinners";
 import axios from "axios";
-import https from "https";
 const spinner = cliSpinners.dots;
 
 export interface ProjectScanPayload {
@@ -150,9 +149,7 @@ async function runTests(
     
     const maybeResults: any = results as any;
     if (maybeResults && maybeResults.scan_details && maybeResults.scan_details.link) {
-      const response = await axios.get(maybeResults.scan_details.link, {
-        httpsAgent: new https.Agent({ rejectUnauthorized: false })
-      });
+      const response = await axios.get(maybeResults.scan_details.link);
       
       const scanData = response.data;
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

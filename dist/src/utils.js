@@ -44,9 +44,7 @@ const getApi = (apiToken) => {
 };
 const initializeWebSocket = (apiToken, payload, spinner = true) => {
     const wsUrl = 'wss://api-ws.solidityscan.com/';
-    const ws = new ws_1.default(wsUrl, {
-        rejectUnauthorized: false
-    });
+    const ws = new ws_1.default(wsUrl);
     const emitMessage = (messagePayload) => {
         ws.send(JSON.stringify({
             action: "message",

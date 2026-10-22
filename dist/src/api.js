@@ -47,7 +47,6 @@ const utils = __importStar(require("./utils"));
 const fs_1 = __importDefault(require("fs"));
 const cli_spinners_1 = __importDefault(require("cli-spinners"));
 const axios_1 = __importDefault(require("axios"));
-const https_1 = __importDefault(require("https"));
 const spinner = cli_spinners_1.default.dots;
 async function projectScan(projectPayload, apiToken, spinner = true) {
     const request_payload = {
@@ -136,9 +135,7 @@ async function runTests(projectDirectory, apiToken, projectName) {
         const results = await analyzeProject(projectDirectory, apiToken, projectName, true);
         const maybeResults = results;
         if (maybeResults && maybeResults.scan_details && maybeResults.scan_details.link) {
-            const response = await axios_1.default.get(maybeResults.scan_details.link, {
-                httpsAgent: new https_1.default.Agent({ rejectUnauthorized: false })
-            });
+            const response = await axios_1.default.get(maybeResults.scan_details.link);
             const scanData = response.data;
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
             const filename = `scan-result-${maybeResults.scan_id}-${timestamp}.json`;
